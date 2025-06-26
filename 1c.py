@@ -9,6 +9,7 @@ import random
 
 from tokens import FARMING_BOT_TOKEN
 
+"""Возможные характеристики легендарных персонажей"""
 names = ["Лев", "Тигр", "Мышь", "Лошадь", "Пантера", "Кролик", "Капибара", "Волк", "Лисица", "Хомяк",
          "Утка", "Гусь", "Олень", "Бобёр", "Сова", "Медведь", "Панда", "Кенгуру", "Орёл", "Антилопа",
          "Енот", "Леопард", "Зебра", "Дракон", "Кошка"]
@@ -16,13 +17,19 @@ values1 = ["Белая", "Рыжая", "Красная", "Голубая", "Жё
 values2 = ["Белые", "Рыжие", "Красные", "Голубые", "Жёлтые", "Малиновые", "Радужные", "Зелёные", "Фиолетовые", "Синие"]
 values3 = ["Полоска", "Клетка", "Пятна", "Цветы", "Камуфляж", "Леопард", "Звёзды", "Фигуры", "Сетка", "Рябь"]
 
+
 chance = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+"""Коэффициенты"""
 koffs = [1, 2, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+"""Количество использований, необходимое для применения коэффициента"""
 koffs_kol = [0, 10, 50, 100, 500, 1000, 2500, 5000, 10000, 25000, 50000]
 DB_NAME = '1c.db'
 TOKEN = FARMING_BOT_TOKEN
 
 
+"""Сравнивание дат для проверки на готовность получения валюты.
+Даты хранятся в БД в виде строки в формате 01.01.2000 00:00:00.
+Сравнение строк занимает O(1) времени, не влияет на асинхронность функций"""
 def check_min_datetime(date1: str, date2: str):
     if int(date1[6:11]) > int(date2[6:11]):
         return date2
@@ -57,14 +64,13 @@ def check_min_datetime(date1: str, date2: str):
                             return 0
 
 
+"""Инициализация бота"""
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 logging.basicConfig(level=logging.INFO)
 
 
-# 01.01.2025 00:00:00
-
-
+"""Стартовое сообщение с списком команд"""
 @dp.message(CommandStart())
 async def start(message: Message):
     await message.reply(
@@ -84,22 +90,27 @@ async def start(message: Message):
     )
 
 
+"""Получение валюты"""
 @dp.message(Command(commands=['get']))
 async def get(message: Message):
     lvl_up = False
     value = 0
     new = True
     maybe = False
+    """Подключение к БД"""
     async with aiosqlite.connect(DB_NAME) as db:
+        """Проверка на наличие записи о пользователе"""
         async with db.execute(f'SELECT kol FROM stat WHERE user_id={message.from_user.id}') as cursor:
             async for row in cursor:
                 new = False
         if new:
+            """Запись нового пользователя"""
             await db.execute(
-                f'INSERT INTO stat(user_id, kol, koff, gets_kol, time) VALUES ({message.from_user.id}, 0, 0, 1, 0)')
+                f'INSERT INTO stat(user_id, kol, koff, gets_kol, time) VALUES ({message.from_user.id}, 0, 0, 0, 0)')
             await db.commit()
-            kol, last, koff_index, gets_kol, timezona = 0, None, 0, 1, 0
+            kol, last, koff_index, gets_kol, timezona = 0, None, 0, 0, 0
         else:
+            """Получение значений из БД"""
             async with db.execute(
                     f'SELECT kol, last, gets_kol, koff, time FROM stat WHERE user_id={message.from_user.id}') as cursor:
                 async for row in cursor:
@@ -108,24 +119,33 @@ async def get(message: Message):
                     gets_kol = row[2] + 1
                     koff_index = row[3]
                     timezona = row[4]
+
+        """Преобразование текущего времени к часовому поясу пользователя"""
         if int(timezona) >= 0:
             dtime = (datetime.datetime.now() + datetime.timedelta(hours=int(timezona))).strftime("%d.%m.%Y %X")
         else:
             dtime = (datetime.datetime.now() - datetime.timedelta(hours=abs(int(timezona)))).strftime("%d.%m.%Y %X")
         if not (last is None):
+            """Время следующего возможного получения валюты после времени из БД"""
             h2 = (datetime.datetime(day=int(last[0:2]), month=int(last[3:5]), year=int(last[6:10]),
                                     hour=int(last[11:13]), minute=int(last[14:16]),
                                     second=int(last[17:19])) + datetime.timedelta(hours=2)).strftime("%d.%m.%Y %X")
+
+        """Количество полученной валюты"""
         get_kol = koffs[koff_index]
+        """Проверка на переход на новый уровень"""
         if koff_index + 1 < len(koffs_kol):
             if gets_kol == koffs_kol[koff_index + 1]:
                 koff_index += 1
                 lvl_up = True
+
+        """Проверка на соответствие времени"""
         if last is None:
             maybe = True
         elif check_min_datetime(dtime, h2) != dtime:
             maybe = True
         if maybe:
+            """Обновление БД, ответ пользователю"""
             await db.execute(
                 f'UPDATE stat SET kol={kol + get_kol}, last="{dtime}", koff={koff_index}, gets_kol={gets_kol} WHERE user_id={message.from_user.id}')
             await db.commit()
@@ -137,14 +157,19 @@ async def get(message: Message):
             await message.reply('Рано получать вуппитов❌')
 
 
+"""Покупка легендарного персонажа"""
 @dp.message(Command(commands=['buy']))
 async def buy(message: Message):
     balance = 0
     num = 1
+    """Подключение к БД"""
     async with aiosqlite.connect(DB_NAME) as db:
+        """Получение данных"""
         async with db.execute(f'SELECT kol FROM stat WHERE user_id={message.from_user.id}') as cursor:
             async for row in cursor:
                 balance = row[0]
+
+        """ID легендарного персонажа уникален для пользователя, а не всей таблицы"""
         async with db.execute(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}') as cursor:
             async for row in cursor:
                 if not (row[0] is None):
@@ -153,10 +178,13 @@ async def buy(message: Message):
                     num = 1
 
         if balance >= 100:
+            """Случайный выбор характеристик"""
             name_ = random.choice(names)
             value1 = random.choice(chance)
             value2 = random.choice(chance)
             value3 = random.choice(chance)
+
+            """Запись в БД, ответ пользователю"""
             await db.execute(f'UPDATE stat SET kol={balance - 100} WHERE user_id={message.from_user.id}')
             await db.execute(
                 f'INSERT INTO legendary(id, user_id, animal, value1, value2, value3) VALUES({num}, {message.from_user.id}, "{name_}", {value1}, {value2}, {value3})')
@@ -172,12 +200,15 @@ async def buy(message: Message):
             await message.reply('Недостаточно вуппитов❌')
 
 
+"""Профиль"""
 @dp.message(Command(commands=['me']))
 async def me(message: Message):
     text = ''
     prof = []
     count = 0
+    """Подключение к БД"""
     async with aiosqlite.connect(DB_NAME) as db:
+        """Получение значений, создание переменных"""
         async with db.execute(f'SELECT * FROM stat WHERE user_id={message.from_user.id}') as cursor:
             async for row in cursor:
                 prof = list(row)
@@ -189,17 +220,20 @@ async def me(message: Message):
                 else:
                     BOOL = check_min_datetime(h2, str((datetime.datetime.now() - datetime.timedelta(hours=abs(int(prof[5])))).strftime("%d.%m.%Y %X"))) != h2
         if not prof:
+            """Запись нового пользователя"""
             await db.execute(
                 f'INSERT INTO stat(user_id, kol, koff, gets_kol, time) VALUES ({message.from_user.id}, 0, 0, 0, 0)')
             await db.commit()
             prof = [message.from_user.id, 0, None, 0, 0, 0]
             BOOL = False
 
+        """Получение информации о легендарных персонажах"""
         async with db.execute(f'SELECT * FROM legendary WHERE user_id={message.from_user.id}') as cursor:
             async for row in cursor:
                 count += 1
                 text += f'№{row[0]}, {row[2]}{" " + row[3] if row[3] else ""}, Шерсть: {row[4] if row[4] else row[5]}, Глаза: {row[6] if row[6] else row[7]}, Узор: {row[8] if row[8] else row[9]}\n'
 
+    """Ответ пользователю"""
     await message.reply(f'🆔ID: {prof[0]}\n'
                         f'🧸Вуппитов: {prof[1]}\n'
                         f'🧸Всего получено: {prof[3]}\n'
@@ -213,6 +247,7 @@ async def me(message: Message):
     # print(text)
 
 
+"""Прокачка легендарного персонажа"""
 @dp.message(Command(commands=['upgrade']))
 async def upgrade(message: Message):
     maybe = False
@@ -221,7 +256,9 @@ async def upgrade(message: Message):
     add = ''
     value = 0.0
     kol = 0
+    """Подключение к БД"""
     async with aiosqlite.connect(DB_NAME) as db:
+        """Получение информации о легендарных персонажах"""
         async with db.execute(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}') as cursor:
             async for row in cursor:
                 if row is None:
@@ -229,7 +266,9 @@ async def upgrade(message: Message):
                 else:
                     num = row[0]
         try:
+            """Проверка на корректность данных"""
             if 1 <= int(text[2]) <= 3 and 1 <= int(text[1]) <= num:
+                """Получение уровня характеристики"""
                 async with db.execute(
                         f'SELECT value{text[2]} FROM legendary WHERE user_id={message.from_user.id} AND id={text[1]}') as cursor:
                     async for row in cursor:
@@ -239,19 +278,20 @@ async def upgrade(message: Message):
                             value = row[0]
             else:
                 maybe = False
+            """Получение баланса"""
             async with db.execute(f'SELECT kol FROM stat WHERE user_id={message.from_user.id}') as cursor:
                 async for row in cursor:
                     if row is None:
                         maybe = False
                     else:
                         kol = row[0]
-            if 1 <= int(text[2]) <= 3 and 1 <= int(
-                    text[1]) <= num and value <= 0.9 and kol >= 50:
+            if 1 <= int(text[2]) <= 3 and 1 <= int(text[1]) <= num and value <= 0.9 and kol >= 50:
                 maybe = True
         except:
             maybe = False
 
         if maybe:
+            """Запись в БД, ответ пользователю"""
             if text[2] == '1':
                 add = 'Шерсть'
             elif text[2] == '2':
@@ -281,6 +321,7 @@ async def upgrade(message: Message):
                 await message.reply('Неверные значения❌')
 
 
+"""Сделать персонажа коллекционным"""
 @dp.message(Command(commands=['collect', 'collectible', 'collected']))
 async def collect(message: Message):
     maybe = True
@@ -295,8 +336,10 @@ async def collect(message: Message):
         num = text[1]
     else:
         maybe = False
+    """Подключение к БД"""
     async with aiosqlite.connect(DB_NAME) as db:
-        async with db.execute('SELECT max(id) FROM legendary') as cursor:
+        """Получение информации о пользователе, проверка на свободные записи в БД"""
+        async with db.execute('SELECT COUNT(*) FROM legendary') as cursor:
             async for row in cursor:
                 if row is None:
                     enable_ = True
@@ -332,11 +375,14 @@ async def collect(message: Message):
                     if balance < 150:
                         maybe = False
                         break
+
         if maybe and enable_:
+            """Присвоение уникальных характеристик"""
             value1 = random.choice(values1)
             value2 = random.choice(values2)
             value3 = random.choice(values3)
             check = True
+            """Первичная проверка, определение переменной"""
             async with db.execute(
                     f'SELECT id FROM legendary WHERE class1="{value1}" AND class2="{value2}" AND class3="{value3}"') as cursor:
                 async for row in cursor:
@@ -344,6 +390,8 @@ async def collect(message: Message):
                         check = True
                     else:
                         check = False
+
+            """Запуск цикла на поиск доступных значений"""
             while not check:
                 value1 = random.choice(values1)
                 value2 = random.choice(values2)
@@ -357,6 +405,7 @@ async def collect(message: Message):
                         else:
                             check = False
 
+            """Запись в БД, ответ пользователю"""
             await db.execute(
                 f'UPDATE legendary SET class1="{value1}", class2="{value2}", class3="{value3}" WHERE user_id={message.from_user.id} AND id={num}')
             await db.execute(f'UPDATE stat SET kol={balance - 150} WHERE user_id={message.from_user.id}')
@@ -396,13 +445,16 @@ async def new_admin(message: Message):
             await message.reply('Неверный ID❌')
 
 
+"""Присвоение имени легендарному персонажу"""
 @dp.message(Command(commands=['name']))
 async def naming(message: Message):
     if len(message.text.split()) >= 3:
         id_ = message.text.split()[1]
         name_ = ' '.join(message.text.split()[2:])
         count = 0
-        async with (aiosqlite.connect(DB_NAME) as db):
+        """Подключение к БД"""
+        async with aiosqlite.connect(DB_NAME) as db:
+            """Получение значений"""
             async with db.execute(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}') as cursor:
                 async for kol in cursor:
                     if not (kol[0] is None):
@@ -410,13 +462,16 @@ async def naming(message: Message):
                     else:
                         count = 0
             try:
+                """Проверка на наличие легендарных персонажей"""
                 if count > 0:
                     if 1 <= int(id_) <= count:
+                        """Проверка на возможную SQL-инъекцию"""
                         BOOL = '"' in name_ or "'" in name_ or ')' in name_ or '}' in name_ or '--' in name_ or '=' in name_ or \
                             'union' in name_.lower() or 'concat' in name_.lower() or '*' in name_ or ';' in name_ or '@' in name_ or \
                             '|' in name_ or '%' in name_ or '#' in name_ or 'select' in name_.lower() or 'where' in name_.lower() or \
                             '/' in name_ or 'delete' in name_.lower()
                         if not BOOL:
+                            """Запись в БД, ответ пользователю"""
                             await db.execute(
                                 f'UPDATE legendary SET name="{name_}" WHERE user_id={message.from_user.id} AND id={id_}')
                             await db.commit()
@@ -436,6 +491,7 @@ async def naming(message: Message):
         await message.reply('Недостаточно значений❌')
 
 
+"""Смена часового пояса"""
 @dp.message(Command(commands=['time', 'timezone', 'set_time']))
 async def timezone(message: Message):
     if len(message.text.split()) >= 2:
@@ -443,14 +499,17 @@ async def timezone(message: Message):
         last = None
         old_time = 0
         new = True
+        """Подключение к БД"""
         async with aiosqlite.connect(DB_NAME) as db:
             try:
                 if -15 <= int(timer) <= 11:
+                    """Получение значений"""
                     async with db.execute(f'SELECT last, time FROM stat WHERE user_id={message.from_user.id}') as cursor:
                         async for row in cursor:
                             last = row[0]
                             old_time = row[1]
 
+                    """Смена часового пояса в записи в БД"""
                     if not (last is None):
                         if int(timer) - int(old_time) >= 0:
                             new_last = (datetime.datetime(day=int(last[0:2]), month=int(last[3:5]), year=int(last[6:10]),
@@ -463,9 +522,13 @@ async def timezone(message: Message):
                                 "%d.%m.%Y %X")
                         await db.execute(
                             f'UPDATE stat SET last="{new_last}" WHERE user_id={message.from_user.id}')
+
+                    """Проверка на нового пользователя"""
                     async with db.execute(f'SELECT time FROM stat WHERE user_id={message.from_user.id}') as cursor:
                         async for row in cursor:
                             new = False
+
+                    """Запись в БД, ответ пользователю"""
                     if new:
                         await db.execute(
                             f'INSERT INTO stat(user_id, kol, koff, gets_kol, time) VALUES ({message.from_user.id}, 0, 0, 0, {int(timer)})')
