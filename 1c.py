@@ -27,8 +27,8 @@ names = ["Лев", "Тигр", "Мышь", "Лошадь", "Пантера", "К
          "Утка", "Гусь", "Олень", "Бобёр", "Сова", "Медведь", "Панда", "Кенгуру", "Орёл", "Антилопа",
          "Енот", "Леопард", "Зебра", "Дракон", "Кошка"]
 
-"""Названия характеристик в И.п. и Р.п. (ИИИРРР)"""
-param3 = ["Шерсть", "Глаза", "Узор", "Шерсти", "Глаз", "Узора"]
+"""Названия характеристик в И.п., Р.п. и В.п. (ИИИРРРВВВ)"""
+param3 = ["Шерсть", "Глаза", "Узор", "Шерсти", "Глаз", "Узора", "Шерсть", "Глаза", "Узор"]
 
 """Значения характеристик"""
 values1 = ["Белая", "Рыжая", "Красная", "Голубая", "Жёлтая", "Малиновая", "Радужная", "Зелёная", "Фиолетовая", "Синяя"]
@@ -119,6 +119,8 @@ async def get(message: Message):
     value = 0
     new = True
     maybe = False
+    bonus = 0
+
     """Подключение к БД"""
     async with aiosqlite.connect(DB_NAME) as db:
         """Проверка на наличие записи о пользователе"""
@@ -130,35 +132,49 @@ async def get(message: Message):
             await db.execute(
                 f'INSERT INTO stat(user_id, kol, koff, gets_kol, time) VALUES ({message.from_user.id}, 0, 0, 0, 0)')
             await db.commit()
-            kol, last, koff_index, gets_kol, timezona = 0, None, 0, 0, 0
+            kol, last, koff_index, gets_kol, timezona, bonus_date = 0, None, 0, 0, 0, None
         else:
             """Получение значений из БД"""
             async with db.execute(
-                    f'SELECT kol, last, gets_kol, koff, time FROM stat WHERE user_id={message.from_user.id}') as cursor:
+                    f'SELECT kol, last, gets_kol, koff, time, bonus_date FROM stat WHERE user_id={message.from_user.id}') as cursor:
                 async for row in cursor:
                     kol = row[0]
                     last = row[1]
                     gets_kol = row[2] + 1
                     koff_index = row[3]
                     timezona = row[4]
+                    bonus_date = row[5]
 
         """Преобразование текущего времени к часовому поясу пользователя"""
         if int(timezona) >= 0:
             dtime = (datetime.datetime.now() + datetime.timedelta(hours=int(timezona))).strftime("%d.%m.%Y %X")
         else:
             dtime = (datetime.datetime.now() - datetime.timedelta(hours=abs(int(timezona)))).strftime("%d.%m.%Y %X")
+
+        """Количество полученной валюты"""
+        get_kol = koffs[koff_index]
+
         if not (last is None):
             """Время следующего возможного получения валюты после времени из БД"""
             h2 = (datetime.datetime(day=int(last[0:2]), month=int(last[3:5]), year=int(last[6:10]),
                                     hour=int(last[11:13]), minute=int(last[14:16]),
                                     second=int(last[17:19])) + datetime.timedelta(hours=2)).strftime("%d.%m.%Y %X")
 
-        """Количество полученной валюты"""
-        get_kol = koffs[koff_index]
+            """Бонус за новый день"""
+            bonus = int(random.choice(chance) * 10 * random.choice([1, 1.5, 2, 2.5, 3])) * koffs[koff_index]
+            if bonus_date is None:
+                get_kol += bonus
+                await db.execute(f'UPDATE stat SET bonus_date="{datetime.date.today().strftime("%d.%m.%Y")}" WHERE user_id={message.from_user.id}')
+                await db.commit()
+            else:
+                if check_min_datetime(datetime.date.today().strftime("%d.%m.%Y %X"), bonus_date + " 00:00:00") == bonus_date + " 00:00:00":
+                    get_kol += bonus
+                    await db.execute(f'UPDATE stat SET bonus_date="{datetime.date.today().strftime("%d.%m.%Y")}" WHERE user_id={message.from_user.id}')
+                    await db.commit()
+
         """Проверка на переход на новый уровень"""
         if koff_index + 1 < len(koffs_kol):
             if gets_kol == koffs_kol[koff_index + 1]:
-                koff_index += 1
                 lvl_up = True
         """Проверка на соответствие времени"""
         if last is None:
@@ -168,12 +184,12 @@ async def get(message: Message):
         if maybe:
             """Обновление БД, ответ пользователю"""
             await db.execute(
-                f'UPDATE stat SET kol={kol + get_kol}, last="{dtime}", koff={koff_index}, gets_kol={gets_kol} WHERE user_id={message.from_user.id}')
+                f'UPDATE stat SET kol={kol + get_kol}, last="{dtime}", koff={koff_index + (1 if lvl_up else 0)}, gets_kol={gets_kol} WHERE user_id={message.from_user.id}')
             await db.commit()
             await message.reply(
-                f'{message.from_user.full_name}, вы получили {get_kol}{param1[13]}\n'
+                f'{message.from_user.full_name}, вы получили {get_kol}{param1[13]}{" (Ежедневный бонус: " + str(bonus) + param1[13] + ")" if get_kol != koffs[koff_index] else ""}\n'
                 f'Возвращайтесь через 2 часа. Всего: {kol + get_kol}{param1[13]}\n'
-                f'{"Новый уровень! " if lvl_up else ""}Ваш уровень: {koff_index + 1} (x{koffs[koff_index]}). {"До следующего уровня: " + str(koffs_kol[koff_index + 1] - gets_kol) if koff_index + 1 != len(koffs_kol) else ""}')
+                f'{"Новый уровень! " if lvl_up else ""}Ваш уровень: {koff_index + 1 + (1 if lvl_up else 0)} (x{koffs[koff_index + (1 if lvl_up else 0)]}). {"До следующего уровня: " + str(koffs_kol[koff_index + 1 + (1 if lvl_up else 0)] - gets_kol) if koff_index + 1 != len(koffs_kol) else ""}')
         else:
             await message.reply(f'Рано получать {param1[9]}❌')
 
@@ -210,7 +226,7 @@ async def buy(message: Message):
             await db.execute(
                 f'INSERT INTO legendary(id, user_id, animal, value1, value2, value3) VALUES({num}, {message.from_user.id}, "{name_}", {value1}, {value2}, {value3})')
             await db.commit()
-            await message.reply(f'Поздравляю с покупкой легендарн{add1} {param2[1]}!🎠\n'
+            await message.reply(f'Поздравляю с покупкой легендарн{add1} {param2[1]}!{param2[14]}\n'
                                 f'№: {num}\n'
                                 f'Вид: {name_}\n'
                                 f'Уровень {param3[3]}: {value1}\n'
@@ -276,23 +292,32 @@ async def upgrade(message: Message):
     num = 0
     text = message.text.split()
     add = ''
+    p1 = "0"
+    p2 = "1"
     value = 0.0
     kol = 0
+
+    if len(text) >= 3:
+        p1 = text[1]
+        p2 = text[2]
+    else:
+        status = "Недостаточно значений❌"
+
     """Подключение к БД"""
     async with aiosqlite.connect(DB_NAME) as db:
         """Получение информации о легендарных персонажах"""
         async with db.execute(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}') as cursor:
             async for row in cursor:
                 if row is None:
-                    status = f"Неверный номер {param2[1]}❌"
+                    status = f"Нет легендарных {param2[7]}❌"
                 else:
                     num = row[0]
 
         """Проверка на корректность данных"""
-        if text[2] in ['1', '2', '3'] and text[1] in [str(x) for x in range(1, num+1)]:
+        if p2 in ['1', '2', '3'] and p1 in [str(x) for x in range(1, num+1)]:
             """Получение уровня характеристики"""
             async with db.execute(
-                    f'SELECT value{text[2]} FROM legendary WHERE user_id={message.from_user.id} AND id={text[1]}') as cursor:
+                    f'SELECT value{p2} FROM legendary WHERE user_id={message.from_user.id} AND id={p1}') as cursor:
                 async for row in cursor:
                     if row is None:
                         status = "Неверные значения❌"
@@ -316,11 +341,11 @@ async def upgrade(message: Message):
         if status == "OK":
             """Запись в БД, ответ пользователю"""
             if text[2] == '1':
-                add = param3[0]
+                add = param3[6]
             elif text[2] == '2':
-                add = param3[1]
+                add = param3[7]
             else:
-                add = param3[2]
+                add = param3[8]
             await db.execute(f'UPDATE stat SET kol={kol - price[1]} WHERE user_id={message.from_user.id}')
             await db.execute(
                 f'UPDATE legendary SET value{text[2]} = {round(value + 0.1, 1)} WHERE user_id={message.from_user.id} AND id={text[1]}')
@@ -334,59 +359,50 @@ async def upgrade(message: Message):
 """Сделать персонажа коллекционным"""
 @dp.message(Command(commands=['collect', 'collectible', 'collected']))
 async def collect(message: Message):
-    maybe = True
+    status = "OK"
     enable_ = True
     num = 0
     kol = 0
     balance = 0
-    check_num = 0
     check_values = 0
     text = message.text.split()
     if len(text) >= 2:
         num = text[1]
     else:
-        maybe = False
+        status = "Недостаточно значений❌"
     """Подключение к БД"""
     async with aiosqlite.connect(DB_NAME) as db:
-        """Получение информации о пользователе, проверка на свободные записи в БД"""
+        """Проверка на свободные записи в БД"""
         async with db.execute('SELECT COUNT(*) FROM legendary') as cursor:
             async for row in cursor:
                 if row is None:
                     enable_ = True
                 else:
                     if len(names) * len(values1) * len(values2) * len(values3) == row[0]:
-                        enable_ = False
-        async with db.execute(
-                f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id} AND id={num}') as cursor:
-            async for row in cursor:
-                if row is None:
-                    maybe = False
-                    break
-                else:
-                    check_num = row[0]
+                        status = f"Коллекционные {param2[6]} закончились❌"
+
+        """Получение информации из БД"""
         async with db.execute(
                 f'SELECT value1, value2, value3 FROM legendary WHERE user_id={message.from_user.id} AND id={num}') as cursor:
             async for row in cursor:
                 if row is None:
-                    maybe = False
-                    break
+                    status = "Неверные значения❌"
                 else:
                     check_values = sum(row)
                     if check_values < 3:
-                        maybe = False
-                        break
+                        status = f"{param2[0].capitalize()} недостаточно прокачан❌"
+
+        """Получение баланса"""
         async with db.execute(f'SELECT kol FROM stat WHERE user_id={message.from_user.id}') as cursor:
             async for row in cursor:
                 if row is None:
-                    maybe = False
-                    break
+                    status = f"Недостаточно {param1[7]}❌"
                 else:
                     balance = row[0]
                     if balance < price[2]:
-                        maybe = False
-                        break
+                        status = f"Недостаточно {param1[7]}❌"
 
-        if maybe and enable_:
+        if status == "OK":
             """Присвоение уникальных характеристик"""
             value1 = random.choice(values1)
             value2 = random.choice(values2)
@@ -425,10 +441,8 @@ async def collect(message: Message):
                                 f'{param3[1]}: {value2}\n'
                                 f'{param3[2]}: {value3}\n'
                                 f'Ваш баланс: {balance - price[2]}{param1[13]}')
-        elif not enable_:
-            await message.reply(f'Коллекционные {param2[6]} закончились❌')
         else:
-            await message.reply('Неверные значения❌')
+            await message.reply(status)
 
 
 @dp.message(Command(commands=['new_admin', 'add_admin']))
