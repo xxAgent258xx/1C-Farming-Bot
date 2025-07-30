@@ -9,14 +9,34 @@ import random
 
 from tokens import FARMING_BOT_TOKEN
 
-"""Возможные характеристики легендарных персонажей"""
+"""ПАРАМЕТРЫ ПРИЛОЖЕНИЯ"""
+
+"""Название валюты во всех падежах, род/число в начальной форме ('М' / 'Ж' / 'СР' / 'МН'), эмодзи"""
+param1 = ["вуппит", "вуппита", "вуппиту", "вуппита", "вуппитом", "вуппите", "вуппиты", "вуппитов", "вуппитам", "вуппитов", "вуппитами", "вуппитах", "М", "🧸"]
+
+"""Название персонажа во всех падежах, род/число в начальной форме ('М' / 'Ж' / 'СР' / 'МН'), эмодзи обычного и легендарного"""
+param2 = ["вуппит", "вуппита", "вуппиту", "вуппита", "вуппитом", "вуппите", "вуппиты", "вуппитов", "вуппитам", "вуппитов", "вуппитами", "вуппитах", "М", "🧸", "🎠"]
+
+"""Окончания прилагательных для некоторых падежей"""
+add1 = "ого" if param2[12] == 'М' else "ую" if param2[12] == 'Ж' else "ое" if param2[12] == 'СР' else 'ые'
+add2 = "ой" if param2[12] == 'Ж' else "ыми" if param2[12] == 'МН' else "ым"
+add3 = "ой" if param2[12] == 'Ж' else "ым" if param2[12] == 'МН' else "ому"
+
+"""Возможные разновидности легендарных персонажей"""
 names = ["Лев", "Тигр", "Мышь", "Лошадь", "Пантера", "Кролик", "Капибара", "Волк", "Лисица", "Хомяк",
          "Утка", "Гусь", "Олень", "Бобёр", "Сова", "Медведь", "Панда", "Кенгуру", "Орёл", "Антилопа",
          "Енот", "Леопард", "Зебра", "Дракон", "Кошка"]
+
+"""Названия характеристик в И.п. и Р.п. (ИИИРРР)"""
+param3 = ["Шерсть", "Глаза", "Узор", "Шерсти", "Глаз", "Узора"]
+
+"""Значения характеристик"""
 values1 = ["Белая", "Рыжая", "Красная", "Голубая", "Жёлтая", "Малиновая", "Радужная", "Зелёная", "Фиолетовая", "Синяя"]
 values2 = ["Белые", "Рыжие", "Красные", "Голубые", "Жёлтые", "Малиновые", "Радужные", "Зелёные", "Фиолетовые", "Синие"]
 values3 = ["Полоска", "Клетка", "Пятна", "Цветы", "Камуфляж", "Леопард", "Звёзды", "Фигуры", "Сетка", "Рябь"]
 
+"""Стоимость покупки, прокачки легендарного персонажа, выпуска коллекционного"""
+price = [50, 25, 30]
 
 chance = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 """Коэффициенты"""
@@ -73,17 +93,19 @@ logging.basicConfig(level=logging.INFO)
 """Стартовое сообщение с списком команд"""
 @dp.message(CommandStart())
 async def start(message: Message):
+
     await message.reply(
-        'Добро пожаловать в увлекательную игру!\nЗдесь ты сможешь получать вуппитов и обменивать их на легендарных!\n'
-        '📋Список команд:\n/get - получить вуппита🧸\n'
-        '/buy - купить легендарного вуппита за 100🧸\n'
-        '/upgrade {№} {#} - прокачать легендарного вуппита за 50🧸\n'
-        '/collect {№} - сделать полностью прокачанного легендарного вуппита коллекционным за 150🧸\n'
-        '/name {№} {""} - задать имя коллекционному вуппиту\n'
+        f'Добро пожаловать в увлекательную игру!\nЗдесь ты сможешь получать {param1[9]} и обменивать их на легендарные!\n'
+        '📋Список команд:\n'
+        f'/get - получить {param1[3]}{param1[13]}\n'
+        f'/buy - купить легендарн{add1} {param2[3]} за {price[0]}{param1[13]}\n'
+        '/upgrade {№} {#} - прокачать ' + f'легендарн{add1} {param2[3]} за {price[1]}{param1[13]}\n'
+        '/collect {№} - сделать полностью прокачанного ' + f'легендарн{add1} {param2[3]} коллекционн{add2} за {price[2]}{param1[13]}\n'
+        '/name {№} {""} - задать имя ' + f'коллекционн{add3} {param2[2]}\n'
         '/me - посмотреть профиль\n'
         '/time {ЧЧ} - сменить разницу времени с МСК\n'
-        '\n{№} - номер вуппита, с которым совершается действие\n'
-        '{""} - имя вуппита\n'
+        '\n{№} - номер ' + f'{param2[1]}, с которым совершается действие\n'
+        '{""} - имя ' + f'{param2[1]}\n'
         '{ЧЧ} - разница во времени от -15 до +11\n'
         '{#} - номер характеристики (1, 2 или 3)'
 
@@ -138,7 +160,6 @@ async def get(message: Message):
             if gets_kol == koffs_kol[koff_index + 1]:
                 koff_index += 1
                 lvl_up = True
-
         """Проверка на соответствие времени"""
         if last is None:
             maybe = True
@@ -150,11 +171,11 @@ async def get(message: Message):
                 f'UPDATE stat SET kol={kol + get_kol}, last="{dtime}", koff={koff_index}, gets_kol={gets_kol} WHERE user_id={message.from_user.id}')
             await db.commit()
             await message.reply(
-                f'{message.from_user.full_name}, вы получили {get_kol}🧸\n'
-                f'Возвращайтесь через 2 часа. Всего: {kol + get_kol}🧸\n'
+                f'{message.from_user.full_name}, вы получили {get_kol}{param1[13]}\n'
+                f'Возвращайтесь через 2 часа. Всего: {kol + get_kol}{param1[13]}\n'
                 f'{"Новый уровень! " if lvl_up else ""}Ваш уровень: {koff_index + 1} (x{koffs[koff_index]}). {"До следующего уровня: " + str(koffs_kol[koff_index + 1] - gets_kol) if koff_index + 1 != len(koffs_kol) else ""}')
         else:
-            await message.reply('Рано получать вуппитов❌')
+            await message.reply(f'Рано получать {param1[9]}❌')
 
 
 """Покупка легендарного персонажа"""
@@ -177,7 +198,7 @@ async def buy(message: Message):
                 else:
                     num = 1
 
-        if balance >= 100:
+        if balance >= price[0]:
             """Случайный выбор характеристик"""
             name_ = random.choice(names)
             value1 = random.choice(chance)
@@ -185,19 +206,19 @@ async def buy(message: Message):
             value3 = random.choice(chance)
 
             """Запись в БД, ответ пользователю"""
-            await db.execute(f'UPDATE stat SET kol={balance - 100} WHERE user_id={message.from_user.id}')
+            await db.execute(f'UPDATE stat SET kol={balance - price[0]} WHERE user_id={message.from_user.id}')
             await db.execute(
                 f'INSERT INTO legendary(id, user_id, animal, value1, value2, value3) VALUES({num}, {message.from_user.id}, "{name_}", {value1}, {value2}, {value3})')
             await db.commit()
-            await message.reply('Поздравляю с покупкой легендарного вуппита!🎠\n'
+            await message.reply(f'Поздравляю с покупкой легендарн{add1} {param2[1]}!🎠\n'
                                 f'№: {num}\n'
-                                f'Животное: {name_}\n'
-                                f'Уровень цвета шерсти: {value1}\n'
-                                f'Уровень цвета глаза: {value2}\n'
-                                f'Уровень узора: {value3}\n\n'
-                                f'Прокачайте вуппита до максимального уровня, чтобы сделать коллекционным!')
+                                f'Вид: {name_}\n'
+                                f'Уровень {param3[3]}: {value1}\n'
+                                f'Уровень {param3[4]}: {value2}\n'
+                                f'Уровень {param3[5]}: {value3}\n\n'
+                                f'Прокачайте {param2[3]} до максимального уровня, чтобы сделать коллекционн{add2}!')
         else:
-            await message.reply('Недостаточно вуппитов❌')
+            await message.reply(f'Недостаточно {param1[7]}❌')
 
 
 """Профиль"""
@@ -231,18 +252,19 @@ async def me(message: Message):
         async with db.execute(f'SELECT * FROM legendary WHERE user_id={message.from_user.id}') as cursor:
             async for row in cursor:
                 count += 1
-                text += f'№{row[0]}, {row[2]}{" " + row[3] if row[3] else ""}, Шерсть: {row[4] if row[4] else row[5]}, Глаза: {row[6] if row[6] else row[7]}, Узор: {row[8] if row[8] else row[9]}\n'
+                text += f'№{row[0]}, {row[2]}{" " + row[3] if row[3] else ""}, {param3[0]}: {row[4] if row[4] else row[5]}, {param3[1]}: {row[6] if row[6] else row[7]}, {param3[2]}: {row[8] if row[8] else row[9]}\n'
 
     """Ответ пользователю"""
     await message.reply(f'🆔ID: {prof[0]}\n'
-                        f'🧸Вуппитов: {prof[1]}\n'
-                        f'🧸Всего получено: {prof[3]}\n'
+                        f'{param1[13]}{param1[7].capitalize()}: {prof[1]}\n'
+                        f'{param1[13]}Всего получено: {prof[3]}\n'
                         f'↗️Ваш уровень: {prof[4] + 1} (x{koffs[prof[4]]})\n'
                         f'{"🆙До следующего уровня: " + str(koffs_kol[prof[4] + 1] - prof[3]) if prof[4] + 1 != len(koffs_kol) else ""}\n'
                         f'⏰Следующее получение: {h2 if BOOL else 'уже доступно! /get'}\n'
                         f'\n⚙️Часовой пояс: МСК{"+" if int(prof[5]) >= 0 else ""}{int(prof[5])}'
                         )
-    await message.reply(f'🎠Легендарных вуппитов: {count}\n{text}')
+    if count > 0:
+        await message.reply(f'{param2[14]}Легендарных {param2[7]}: {count}\n{text}')
     # print(prof)
     # print(text)
 
@@ -250,7 +272,7 @@ async def me(message: Message):
 """Прокачка легендарного персонажа"""
 @dp.message(Command(commands=['upgrade']))
 async def upgrade(message: Message):
-    maybe = False
+    status = "OK"
     num = 0
     text = message.text.split()
     add = ''
@@ -262,63 +284,51 @@ async def upgrade(message: Message):
         async with db.execute(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}') as cursor:
             async for row in cursor:
                 if row is None:
-                    maybe = False
+                    status = f"Неверный номер {param2[1]}❌"
                 else:
                     num = row[0]
-        try:
-            """Проверка на корректность данных"""
-            if 1 <= int(text[2]) <= 3 and 1 <= int(text[1]) <= num:
-                """Получение уровня характеристики"""
-                async with db.execute(
-                        f'SELECT value{text[2]} FROM legendary WHERE user_id={message.from_user.id} AND id={text[1]}') as cursor:
-                    async for row in cursor:
-                        if row is None:
-                            maybe = False
-                        else:
-                            value = row[0]
-            else:
-                maybe = False
-            """Получение баланса"""
-            async with db.execute(f'SELECT kol FROM stat WHERE user_id={message.from_user.id}') as cursor:
+
+        """Проверка на корректность данных"""
+        if text[2] in ['1', '2', '3'] and text[1] in [str(x) for x in range(1, num+1)]:
+            """Получение уровня характеристики"""
+            async with db.execute(
+                    f'SELECT value{text[2]} FROM legendary WHERE user_id={message.from_user.id} AND id={text[1]}') as cursor:
                 async for row in cursor:
                     if row is None:
-                        maybe = False
+                        status = "Неверные значения❌"
                     else:
-                        kol = row[0]
-            if 1 <= int(text[2]) <= 3 and 1 <= int(text[1]) <= num and value <= 0.9 and kol >= 50:
-                maybe = True
-        except:
-            maybe = False
+                        value = row[0]
+                        if value > 0.9:
+                            status = "Достигнут максимальный уровень❌"
+        else:
+            status = "Неверные значения❌"
+        """Получение баланса"""
+        async with db.execute(f'SELECT kol FROM stat WHERE user_id={message.from_user.id}') as cursor:
+            async for row in cursor:
+                if row is None:
+                    status = f"Недостаточно {param1[7]}❌"
+                else:
+                    kol = row[0]
+                    if kol < price[1]:
+                        status = f"Недостаточно {param1[7]}❌"
+        # if 1 <= int(text[2]) <= 3 and 1 <= int(text[1]) <= num and value <= 0.9 and kol >= 50:
 
-        if maybe:
+        if status == "OK":
             """Запись в БД, ответ пользователю"""
             if text[2] == '1':
-                add = 'Шерсть'
+                add = param3[0]
             elif text[2] == '2':
-                add = 'Глаза'
+                add = param3[1]
             else:
-                add = 'Узор'
-            await db.execute(f'UPDATE stat SET kol={kol - 50} WHERE user_id={message.from_user.id}')
+                add = param3[2]
+            await db.execute(f'UPDATE stat SET kol={kol - price[1]} WHERE user_id={message.from_user.id}')
             await db.execute(
                 f'UPDATE legendary SET value{text[2]} = {round(value + 0.1, 1)} WHERE user_id={message.from_user.id} AND id={text[1]}')
             await db.commit()
             await message.reply(f'Вы прокачали {add} до {round(value + 0.1, 1) if value < 0.9 else 1}!\n'
-                                f'Ваш баланс: {kol - 50}🧸\n')
+                                f'Ваш баланс: {kol - price[1]}{param1[13]}\n')
         else:
-            try:
-                if len(text) >= 3:
-                    if int(text[1]) > num or int(text[1]) < 1:
-                        await message.reply('Неверный номер вуппита❌')
-                    elif int(text[2]) > 3 or int(text[2]) < 1:
-                        await message.reply('Неверный номер характеристики❌')
-                    elif value >= 1.0:
-                        await message.reply('Достигнут максимальный уровень❌')
-                    elif kol < 50:
-                        await message.reply('Недостаточно вуппитов❌')
-                else:
-                    await message.reply('Недостаточно значений❌')
-            except:
-                await message.reply('Неверные значения❌')
+            await message.reply(status)
 
 
 """Сделать персонажа коллекционным"""
@@ -372,7 +382,7 @@ async def collect(message: Message):
                     break
                 else:
                     balance = row[0]
-                    if balance < 150:
+                    if balance < price[2]:
                         maybe = False
                         break
 
@@ -408,15 +418,15 @@ async def collect(message: Message):
             """Запись в БД, ответ пользователю"""
             await db.execute(
                 f'UPDATE legendary SET class1="{value1}", class2="{value2}", class3="{value3}" WHERE user_id={message.from_user.id} AND id={num}')
-            await db.execute(f'UPDATE stat SET kol={balance - 150} WHERE user_id={message.from_user.id}')
+            await db.execute(f'UPDATE stat SET kol={balance - price[2]} WHERE user_id={message.from_user.id}')
             await db.commit()
-            await message.reply(f'Вуппит №{num} стал коллекционным!\n'
-                                f'Шерсть: {value1}\n'
-                                f'Глаза: {value2}\n'
-                                f'Узор: {value3}\n'
-                                f'Ваш баланс: {balance - 150}🧸')
+            await message.reply(f'{param2[0].capitalize()} №{num} стал коллекционн{add2}!\n'
+                                f'{param3[0]}: {value1}\n'
+                                f'{param3[1]}: {value2}\n'
+                                f'{param3[2]}: {value3}\n'
+                                f'Ваш баланс: {balance - price[2]}{param1[13]}')
         elif not enable_:
-            await message.reply('Коллекционные вуппиты закончились❌')
+            await message.reply(f'Коллекционные {param2[6]} закончились❌')
         else:
             await message.reply('Неверные значения❌')
 
@@ -484,7 +494,7 @@ async def naming(message: Message):
                     else:
                         await message.reply('Неверный ID❌')
                 else:
-                    await message.reply('Нет легендарных вуппитов❌')
+                    await message.reply(f'Нет легендарных {param2[7]}❌')
             except:
                 await message.reply('Неверный ID❌')
     else:
@@ -581,16 +591,16 @@ async def on_startup():
     bot_info = await bot.get_me()
     async with aiosqlite.connect(DB_NAME) as db:
         async with db.execute(f'SELECT * FROM admins') as cursor:
-            async for ADMIN_ID in cursor:
-                await bot.send_message(ADMIN_ID[0], f'Бот @{bot_info.username} включён')
+            async for ADMIN in cursor:
+                await bot.send_message(ADMIN[0], f'Бот @{bot_info.username} включён')
 
 
 async def on_shutdown():
     bot_info = await bot.get_me()
     async with aiosqlite.connect(DB_NAME) as db:
         async with db.execute(f'SELECT * FROM admins') as cursor:
-            async for ADMIN_ID in cursor:
-                await bot.send_message(ADMIN_ID[0], f'Бот @{bot_info.username} выключен')
+            async for ADMIN in cursor:
+                await bot.send_message(ADMIN[0], f'Бот @{bot_info.username} выключен')
 
 
 async def main():
