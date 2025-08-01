@@ -14,25 +14,36 @@ from tokens import FARMING_BOT_TOKEN
 """ПАРАМЕТРЫ ПРИЛОЖЕНИЯ"""
 
 """Название валюты во всех падежах, род/число в начальной форме ('М' / 'Ж' / 'СР' / 'МН'), эмодзи"""
-param1 = ["вуппит", "вуппита", "вуппиту", "вуппита", "вуппитом", "вуппите", "вуппиты", "вуппитов", "вуппитам",
-          "вуппитов", "вуппитами", "вуппитах", "М", "🧸"]
+param1 = ["вуппит", "вуппита", "вуппиту", "вуппита", "вуппитом", "вуппите",
+          "вуппиты", "вуппитов", "вуппитам", "вуппитов", "вуппитами", "вуппитах",
+          "М", "🧸"]
 
 """Название персонажа во всех падежах, род/число в начальной форме ('М' / 'Ж' / 'СР' / 'МН'), эмодзи обычного и легендарного"""
-param2 = ["вуппит", "вуппита", "вуппиту", "вуппита", "вуппитом", "вуппите", "вуппиты", "вуппитов", "вуппитам",
-          "вуппитов", "вуппитами", "вуппитах", "М", "🧸", "🎠"]
+param2 = ["вуппит", "вуппита", "вуппиту", "вуппита", "вуппитом", "вуппите",
+          "вуппиты", "вуппитов", "вуппитам", "вуппитов", "вуппитами", "вуппитах",
+          "М", "🧸", "🎠"]
 
 """Возможные разновидности легендарных персонажей"""
-names = ["Лев", "Тигр", "Мышь", "Лошадь", "Пантера", "Кролик", "Капибара", "Волк", "Лисица", "Хомяк",
-         "Утка", "Гусь", "Олень", "Бобёр", "Сова", "Медведь", "Панда", "Кенгуру", "Орёл", "Антилопа",
+names = ["Лев", "Тигр", "Мышь", "Лошадь", "Пантера",
+         "Кролик", "Капибара", "Волк", "Лисица", "Хомяк",
+         "Утка", "Гусь", "Олень", "Бобёр", "Сова",
+         "Медведь", "Панда", "Кенгуру", "Орёл", "Антилопа",
          "Енот", "Леопард", "Зебра", "Дракон", "Кошка"]
 
-"""Названия характеристик в И.п., Р.п. и В.п. (ИИИРРРВВВ)"""
-param3 = ["Шерсть", "Глаза", "Узор", "Шерсти", "Глаз", "Узора", "Шерсть", "Глаза", "Узор"]
+"""Названия характеристик в И.п., Р.п. и В.п."""
+param3 = ["Шерсть", "Глаза", "Узор",
+          "Шерсти", "Глаз", "Узора",
+          "Шерсть", "Глаза", "Узор"]
 
 """Значения характеристик"""
-values1 = ["Белая", "Рыжая", "Красная", "Голубая", "Жёлтая", "Малиновая", "Радужная", "Зелёная", "Фиолетовая", "Синяя"]
-values2 = ["Белые", "Рыжие", "Красные", "Голубые", "Жёлтые", "Малиновые", "Радужные", "Зелёные", "Фиолетовые", "Синие"]
-values3 = ["Полоска", "Клетка", "Пятна", "Цветы", "Камуфляж", "Леопард", "Звёзды", "Фигуры", "Сетка", "Рябь"]
+values1 = ["Белая", "Рыжая", "Красная", "Голубая", "Жёлтая",
+           "Малиновая", "Радужная", "Зелёная", "Фиолетовая", "Синяя"]
+
+values2 = ["Белые", "Рыжие", "Красные", "Голубые", "Жёлтые",
+           "Малиновые", "Радужные", "Зелёные", "Фиолетовые", "Синие"]
+
+values3 = ["Полоска", "Клетка", "Пятна", "Цветы", "Камуфляж",
+           "Леопард", "Звёзды", "Фигуры", "Сетка", "Рябь"]
 
 """Стоимость покупки, прокачки легендарного персонажа, выпуска коллекционного"""
 price = [50, 25, 30]
@@ -57,10 +68,9 @@ koffs_kol = [0, 10, 50, 100, 500, 1000, 2500, 5000, 10000, 25000, 50000]
 DB_NAME = '1c.db'
 TOKEN = FARMING_BOT_TOKEN
 
-"""Сравнивание дат для проверки на готовность получения валюты.
-Даты хранятся в БД в виде строки в формате 01.01.2000 00:00:00.
-Сравнение строк занимает O(1) времени, не влияет на асинхронность функций"""
-async def check_min_datetime(date1: str, date2: str):
+
+async def check_min_datetime(date1: str, date2: str) -> str | int:
+    print(date1, date2)
     if int(date1[6:11]) > int(date2[6:11]):
         return date2
     elif int(date1[6:11]) < int(date2[6:11]):
@@ -94,6 +104,24 @@ async def check_min_datetime(date1: str, date2: str):
                             return 0
 
 
+async def select_from_db(query: str) -> list:
+    ans = []
+    async with aiosqlite.connect(DB_NAME) as db:
+        async with db.execute(query) as cursor:
+            async for row in cursor:
+                ans.append(list(row))
+    if len(ans) == 1:
+        return ans[0]
+    else:
+        return ans
+
+
+async def insert_into_db(query: str):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute(query)
+        await db.commit()
+
+
 """Инициализация бота"""
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -102,6 +130,8 @@ logging.basicConfig(level=logging.INFO)
 """Стартовое сообщение с списком команд"""
 @dp.message(CommandStart())
 async def start(message: Message):
+    await insert_into_db(f"INSERT INTO stat(user_id, kol, koff, gets_kol, time) VALUES ({message.from_user.id}, 0, 0, 0, 0)")
+
     await message.reply(
         f'Добро пожаловать в увлекательную игру!\nЗдесь ты сможешь получать {param1[9]} и обменивать их на легендарные!\n'
         '📋Список команд:\n'
@@ -126,99 +156,101 @@ async def start(message: Message):
 @dp.message(Command(commands=['get']))
 async def get(message: Message):
     lvl_up = False
-    value = 0
-    new = True
     maybe = False
     bonus = 0
 
-    """Подключение к БД"""
-    async with aiosqlite.connect(DB_NAME) as db:
-        """Проверка на наличие записи о пользователе"""
-        async with db.execute(f'SELECT kol FROM stat WHERE user_id={message.from_user.id}') as cursor:
-            async for row in cursor:
-                new = False
-        if new:
-            """Запись нового пользователя"""
-            await db.execute(
-                f'INSERT INTO stat(user_id, kol, koff, gets_kol, time) VALUES ({message.from_user.id}, 0, 0, 0, 0)')
-            await db.commit()
-            kol, last, koff_index, gets_kol, timezona, bonus_date = 0, None, 0, 0, 0, None
+    """Получение значений из БД"""
+    user = await select_from_db(f"SELECT kol, last, gets_kol, koff, time, bonus_date FROM stat WHERE user_id={message.from_user.id}")
+    kol = user[0]
+    last = user[1]
+    gets_kol = user[2] + 1
+    koff_index = user[3]
+    timezona = user[4]
+    bonus_date = user[5]
+
+    """Преобразование текущего времени к часовому поясу пользователя"""
+    if int(timezona) >= 0:
+        dtime = (
+                datetime.datetime.now() +
+                datetime.timedelta(hours=int(timezona))
+        ).strftime("%d.%m.%Y %X")
+    else:
+        dtime = (
+                datetime.datetime.now() -
+                datetime.timedelta(hours=abs(int(timezona)))
+        ).strftime("%d.%m.%Y %X")
+
+    """Количество полученной валюты"""
+    get_kol = koffs[koff_index]
+
+    """Проверка на переход на новый уровень"""
+    if koff_index + 1 < len(koffs_kol):
+        if gets_kol == koffs_kol[koff_index + 1]:
+            lvl_up = True
+
+    """Проверка на соответствие времени"""
+    if last is None:
+        maybe = True
+
+    else:
+        """Бонус за новый день (не выдаётся при первом запуске)"""
+        bonus = max(int(random.choice(chance) *
+                        random.choice([7.5, 10, 12.5])
+                        ), 1
+                    ) * get_kol
+        if bonus_date is None:
+            get_kol += bonus
+            await insert_into_db(f'UPDATE stat SET bonus_date="{
+            datetime.date.today().strftime("%d.%m.%Y")
+            }" WHERE user_id={message.from_user.id}')
         else:
-            """Получение значений из БД"""
-            async with db.execute(
-                    f'SELECT kol, last, gets_kol, koff, time, bonus_date FROM stat WHERE user_id={message.from_user.id}') as cursor:
-                async for row in cursor:
-                    kol = row[0]
-                    last = row[1]
-                    gets_kol = row[2] + 1
-                    koff_index = row[3]
-                    timezona = row[4]
-                    bonus_date = row[5]
-
-        """Преобразование текущего времени к часовому поясу пользователя"""
-        if int(timezona) >= 0:
-            dtime = (
-                    datetime.datetime.now() +
-                    datetime.timedelta(hours=int(timezona))
-            ).strftime("%d.%m.%Y %X")
-        else:
-            dtime = (
-                    datetime.datetime.now() -
-                    datetime.timedelta(hours=abs(int(timezona)))
-            ).strftime("%d.%m.%Y %X")
-
-        """Количество полученной валюты"""
-        get_kol = koffs[koff_index]
-
-        if not (last is None):
-            """Время следующего возможного получения валюты после времени из БД"""
-            h2 = (datetime.datetime(day=int(last[0:2]),
-                                      month=int(last[3:5]),
-                                      year=int(last[6:10]),
-                                      hour=int(last[11:13]),
-                                      minute=int(last[14:16]),
-                                      second=int(last[17:19]))
-                  + datetime.timedelta(hours=2)
-                  ).strftime("%d.%m.%Y %X")
-
-            """Бонус за новый день"""
-            bonus = max(int(random.choice(chance) *
-                            random.choice([7.5, 10, 12.5])
-                            ), 1
-                        ) * koffs[koff_index]
-            if bonus_date is None:
+            if (await check_min_datetime(datetime.date.today().strftime("%d.%m.%Y %X"),
+                                         bonus_date + " 00:00:00")) == bonus_date + " 00:00:00":
                 get_kol += bonus
-                await db.execute(
-                    f'UPDATE stat SET bonus_date="{datetime.date.today().strftime("%d.%m.%Y")}" WHERE user_id={message.from_user.id}')
-                await db.commit()
-            else:
-                if (await check_min_datetime(datetime.date.today().strftime("%d.%m.%Y %X"),
-                                             bonus_date + " 00:00:00")) == bonus_date + " 00:00:00":
-                    get_kol += bonus
-                    await db.execute(
-                        f'UPDATE stat SET bonus_date="{datetime.date.today().strftime("%d.%m.%Y")}" WHERE user_id={message.from_user.id}')
-                    await db.commit()
+                await insert_into_db(f'UPDATE stat SET bonus_date="{
+                datetime.date.today().strftime("%d.%m.%Y")
+                }" WHERE user_id={message.from_user.id}')
 
-        """Проверка на переход на новый уровень"""
-        if koff_index + 1 < len(koffs_kol):
-            if gets_kol == koffs_kol[koff_index + 1]:
-                lvl_up = True
-        """Проверка на соответствие времени"""
-        if last is None:
+        """Время следующего возможного получения валюты после времени из БД"""
+        h2 = (datetime.datetime(day=int(last[0:2]),
+                                month=int(last[3:5]),
+                                year=int(last[6:10]),
+                                hour=int(last[11:13]),
+                                minute=int(last[14:16]),
+                                second=int(last[17:19]))
+              + datetime.timedelta(hours=2)
+              ).strftime("%d.%m.%Y %X")
+
+        """Сравнение текущего времени с временем получения"""
+        if (await check_min_datetime(dtime, h2)) != dtime:
             maybe = True
-        elif (await check_min_datetime(dtime, h2)) != dtime:
-            maybe = True
-        if maybe:
-            """Обновление БД, ответ пользователю"""
-            await db.execute(
-                f'UPDATE stat SET kol={kol + get_kol}, last="{dtime}", koff={koff_index + (1 if lvl_up else 0)}, gets_kol={gets_kol} WHERE user_id={message.from_user.id}')
-            await db.commit()
-            await message.reply(
-                f'{message.from_user.full_name}, вы получили {get_kol}{param1[13]}{" (Ежедневный бонус: " + str(bonus) + param1[13] + ")" if get_kol != koffs[koff_index] else ""}\n'
-                f'Возвращайтесь через 2 часа. Всего: {kol + get_kol}{param1[13]}\n'
-                f'{"Новый уровень! " if lvl_up else ""}Ваш уровень: {koff_index + 1 + (1 if lvl_up else 0)} (x{koffs[koff_index + (1 if lvl_up else 0)]}). {"До следующего уровня: " + str(koffs_kol[koff_index + 1 + (1 if lvl_up else 0)] - gets_kol) if koff_index + 1 != len(koffs_kol) else ""}')
-        else:
-            await message.reply(f'Рано получать {param1[9]}❌')
+
+    if maybe:
+        """Обновление БД, ответ пользователю"""
+        await insert_into_db(
+            f'UPDATE stat SET kol={kol + get_kol}, last="{dtime}", koff={
+            koff_index + (1 if lvl_up else 0)}, gets_kol={
+            gets_kol} WHERE user_id={message.from_user.id}')
+
+        await message.reply(
+
+            f'{message.from_user.full_name}, вы получили {get_kol}{param1[13]}{
+                
+            " (Ежедневный бонус: " + str(bonus) + param1[13] + ")" if get_kol != koffs[koff_index] else ""}\n'
+                
+            f'Возвращайтесь через 2 часа. Всего: {kol + get_kol}{param1[13]}\n'
+                
+            f'{"Новый уровень! " if lvl_up else ""
+            }Ваш уровень: {
+            koff_index + 1 + (1 if lvl_up else 0)} (x{
+            koffs[koff_index + (1 if lvl_up else 0)]}). {
+                
+            "До следующего уровня: " + 
+            str(koffs_kol[koff_index + 1 + (1 if lvl_up else 0)] - gets_kol) if
+            koff_index + 1 != len(koffs_kol) else ""}')
+
+    else:
+        await message.reply(f'Рано получать {param1[9]}❌')
 
 
 """Покупка легендарного персонажа"""
