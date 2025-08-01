@@ -14,10 +14,12 @@ from tokens import FARMING_BOT_TOKEN
 """ПАРАМЕТРЫ ПРИЛОЖЕНИЯ"""
 
 """Название валюты во всех падежах, род/число в начальной форме ('М' / 'Ж' / 'СР' / 'МН'), эмодзи"""
-param1 = ["вуппит", "вуппита", "вуппиту", "вуппита", "вуппитом", "вуппите", "вуппиты", "вуппитов", "вуппитам", "вуппитов", "вуппитами", "вуппитах", "М", "🧸"]
+param1 = ["вуппит", "вуппита", "вуппиту", "вуппита", "вуппитом", "вуппите", "вуппиты", "вуппитов", "вуппитам",
+          "вуппитов", "вуппитами", "вуппитах", "М", "🧸"]
 
 """Название персонажа во всех падежах, род/число в начальной форме ('М' / 'Ж' / 'СР' / 'МН'), эмодзи обычного и легендарного"""
-param2 = ["вуппит", "вуппита", "вуппиту", "вуппита", "вуппитом", "вуппите", "вуппиты", "вуппитов", "вуппитам", "вуппитов", "вуппитами", "вуппитах", "М", "🧸", "🎠"]
+param2 = ["вуппит", "вуппита", "вуппиту", "вуппита", "вуппитом", "вуппите", "вуппиты", "вуппитов", "вуппитам",
+          "вуппитов", "вуппитами", "вуппитах", "М", "🧸", "🎠"]
 
 """Возможные разновидности легендарных персонажей"""
 names = ["Лев", "Тигр", "Мышь", "Лошадь", "Пантера", "Кролик", "Капибара", "Волк", "Лисица", "Хомяк",
@@ -46,18 +48,19 @@ add3 = "ой" if param2[12] == 'Ж' else "ым" if param2[12] == 'МН' else "о
 add4 = "ой" if param2[12] == 'Ж' else "ых" if param2[12] == 'МН' else "ого"
 
 chance = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+
 """Коэффициенты"""
 koffs = [1, 2, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
 """Количество использований, необходимое для применения коэффициента"""
 koffs_kol = [0, 10, 50, 100, 500, 1000, 2500, 5000, 10000, 25000, 50000]
+
 DB_NAME = '1c.db'
 TOKEN = FARMING_BOT_TOKEN
-
 
 """Сравнивание дат для проверки на готовность получения валюты.
 Даты хранятся в БД в виде строки в формате 01.01.2000 00:00:00.
 Сравнение строк занимает O(1) времени, не влияет на асинхронность функций"""
-def check_min_datetime(date1: str, date2: str):
+async def check_min_datetime(date1: str, date2: str):
     if int(date1[6:11]) > int(date2[6:11]):
         return date2
     elif int(date1[6:11]) < int(date2[6:11]):
@@ -96,26 +99,26 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher()
 logging.basicConfig(level=logging.INFO)
 
-
 """Стартовое сообщение с списком команд"""
 @dp.message(CommandStart())
 async def start(message: Message):
-
     await message.reply(
         f'Добро пожаловать в увлекательную игру!\nЗдесь ты сможешь получать {param1[9]} и обменивать их на легендарные!\n'
         '📋Список команд:\n'
         f'/get - получить {param1[3]}{param1[13]}\n'
         f'/buy - купить легендарн{add1} {param2[3]} за {price[0]}{param1[13]}\n'
-        '/upgrade {№} {#} - прокачать ' + f'легендарн{add1} {param2[3]} за {price[1]}{param1[13]}\n'
-        '/collect {№} - сделать полностью ' + f'прокачанн{add1} легендарн{add1} {param2[3]} коллекционн{add2} за {price[2]}{param1[13]}\n'
+        '/upgrade {№} {#} - прокачать ' +
+        f'легендарн{add1} {param2[3]} за {price[1]}{param1[13]}\n'
+        '/collect {№} - сделать полностью ' +
+        f'прокачанн{add1} легендарн{add1} {param2[3]} коллекционн{add2} за {price[2]}{param1[13]}\n'
         '/name {№} {""} - задать имя ' + f'коллекционн{add3} {param2[2]}\n'
         '/me - посмотреть профиль\n'
         '/time {ЧЧ} - сменить разницу времени с МСК\n'
+                                         
         '\n{№} - номер ' + f'{param2[1]}, с которым совершается действие\n'
         '{""} - имя ' + f'{param2[1]}\n'
         '{ЧЧ} - разница во времени от -15 до +11\n'
         '{#} - номер характеристики (1, 2 или 3)'
-
     )
 
 
@@ -154,29 +157,46 @@ async def get(message: Message):
 
         """Преобразование текущего времени к часовому поясу пользователя"""
         if int(timezona) >= 0:
-            dtime = (datetime.datetime.now() + datetime.timedelta(hours=int(timezona))).strftime("%d.%m.%Y %X")
+            dtime = (
+                    datetime.datetime.now() +
+                    datetime.timedelta(hours=int(timezona))
+            ).strftime("%d.%m.%Y %X")
         else:
-            dtime = (datetime.datetime.now() - datetime.timedelta(hours=abs(int(timezona)))).strftime("%d.%m.%Y %X")
+            dtime = (
+                    datetime.datetime.now() -
+                    datetime.timedelta(hours=abs(int(timezona)))
+            ).strftime("%d.%m.%Y %X")
 
         """Количество полученной валюты"""
         get_kol = koffs[koff_index]
 
         if not (last is None):
             """Время следующего возможного получения валюты после времени из БД"""
-            h2 = (datetime.datetime(day=int(last[0:2]), month=int(last[3:5]), year=int(last[6:10]),
-                                    hour=int(last[11:13]), minute=int(last[14:16]),
-                                    second=int(last[17:19])) + datetime.timedelta(hours=2)).strftime("%d.%m.%Y %X")
+            h2 = (datetime.datetime(day=int(last[0:2]),
+                                      month=int(last[3:5]),
+                                      year=int(last[6:10]),
+                                      hour=int(last[11:13]),
+                                      minute=int(last[14:16]),
+                                      second=int(last[17:19]))
+                  + datetime.timedelta(hours=2)
+                  ).strftime("%d.%m.%Y %X")
 
             """Бонус за новый день"""
-            bonus = int(random.choice(chance) * 5 * random.choice([2, 2.5, 3])) * koffs[koff_index]
+            bonus = max(int(random.choice(chance) *
+                            random.choice([7.5, 10, 12.5])
+                            ), 1
+                        ) * koffs[koff_index]
             if bonus_date is None:
                 get_kol += bonus
-                await db.execute(f'UPDATE stat SET bonus_date="{datetime.date.today().strftime("%d.%m.%Y")}" WHERE user_id={message.from_user.id}')
+                await db.execute(
+                    f'UPDATE stat SET bonus_date="{datetime.date.today().strftime("%d.%m.%Y")}" WHERE user_id={message.from_user.id}')
                 await db.commit()
             else:
-                if check_min_datetime(datetime.date.today().strftime("%d.%m.%Y %X"), bonus_date + " 00:00:00") == bonus_date + " 00:00:00":
+                if (await check_min_datetime(datetime.date.today().strftime("%d.%m.%Y %X"),
+                                             bonus_date + " 00:00:00")) == bonus_date + " 00:00:00":
                     get_kol += bonus
-                    await db.execute(f'UPDATE stat SET bonus_date="{datetime.date.today().strftime("%d.%m.%Y")}" WHERE user_id={message.from_user.id}')
+                    await db.execute(
+                        f'UPDATE stat SET bonus_date="{datetime.date.today().strftime("%d.%m.%Y")}" WHERE user_id={message.from_user.id}')
                     await db.commit()
 
         """Проверка на переход на новый уровень"""
@@ -186,7 +206,7 @@ async def get(message: Message):
         """Проверка на соответствие времени"""
         if last is None:
             maybe = True
-        elif check_min_datetime(dtime, h2) != dtime:
+        elif (await check_min_datetime(dtime, h2)) != dtime:
             maybe = True
         if maybe:
             """Обновление БД, ответ пользователю"""
@@ -258,11 +278,22 @@ async def me(message: Message):
                 prof = list(row)
                 h2 = (datetime.datetime(day=int(prof[2][0:2]), month=int(prof[2][3:5]), year=int(prof[2][6:10]),
                                         hour=int(prof[2][11:13]), minute=int(prof[2][14:16]),
-                                        second=int(prof[2][17:19])) + datetime.timedelta(hours=2)).strftime("%d.%m.%Y %X")
+                                        second=int(prof[2][17:19])) + datetime.timedelta(hours=2)).strftime(
+                    "%d.%m.%Y %X")
                 if int(prof[5]) >= 0:
-                    BOOL = check_min_datetime(h2, str((datetime.datetime.now() + datetime.timedelta(hours=int(prof[5]))).strftime("%d.%m.%Y %X"))) != h2
+                    BOOL = (await check_min_datetime(
+                        h2, (datetime.datetime.now() +
+                             datetime.timedelta(
+                                 hours=int(prof[5]))
+                             ).strftime("%d.%m.%Y %X")
+                            )) != h2
                 else:
-                    BOOL = check_min_datetime(h2, str((datetime.datetime.now() - datetime.timedelta(hours=abs(int(prof[5])))).strftime("%d.%m.%Y %X"))) != h2
+                    BOOL = (await check_min_datetime(
+                        h2, (datetime.datetime.now() -
+                             datetime.timedelta(
+                                 hours=abs(int(prof[5])))
+                             ).strftime("%d.%m.%Y %X")
+                            )) != h2
         if not prof:
             """Запись нового пользователя"""
             await db.execute(
@@ -275,21 +306,23 @@ async def me(message: Message):
         async with db.execute(f'SELECT * FROM legendary WHERE user_id={message.from_user.id}') as cursor:
             async for row in cursor:
                 count += 1
-                text += f'№{row[0]}, {row[2]}{" " + row[3] if row[3] else ""}, {param3[0]}: {row[4] if row[4] else row[5]}, {param3[1]}: {row[6] if row[6] else row[7]}, {param3[2]}: {row[8] if row[8] else row[9]}\n'
+                text += (f'№{row[0]}, {row[2]}{" " + row[3] if row[3] else ""}, '
+                         f'{param3[0]}: {row[4] if row[4] else row[5]}, '
+                         f'{param3[1]}: {row[6] if row[6] else row[7]}, '
+                         f'{param3[2]}: {row[8] if row[8] else row[9]}\n')
 
     """Ответ пользователю"""
     await message.reply(f'🆔ID: {prof[0]}\n'
                         f'{param1[13]}{param1[7].capitalize()}: {prof[1]}\n'
                         f'{param1[13]}Всего получено: {prof[3]}\n'
                         f'↗️Ваш уровень: {prof[4] + 1} (x{koffs[prof[4]]})\n'
-                        f'{"🆙До следующего уровня: " + str(koffs_kol[prof[4] + 1] - prof[3]) if prof[4] + 1 != len(koffs_kol) else ""}\n'
+                        f'{"🆙До следующего уровня: " + 
+                           str(koffs_kol[prof[4] + 1] - prof[3]) if prof[4] + 1 != len(koffs_kol) else ""}\n'
                         f'⏰Следующее получение: {h2 if BOOL else 'уже доступно! /get'}\n'
                         f'\n⚙️Часовой пояс: МСК{"+" if int(prof[5]) >= 0 else ""}{int(prof[5])}'
                         )
     if count > 0:
         await message.reply(f'{param2[14]}Легендарных {param2[7]}: {count}\n{text}')
-    # print(prof)
-    # print(text)
 
 
 """Прокачка легендарного персонажа"""
@@ -321,7 +354,7 @@ async def upgrade(message: Message):
                     num = row[0]
 
         """Проверка на корректность данных"""
-        if p2 in ['1', '2', '3'] and p1 in [str(x) for x in range(1, num+1)]:
+        if p2 in ['1', '2', '3'] and p1 in [str(x) for x in range(1, num + 1)]:
             """Получение уровня характеристики"""
             async with db.execute(
                     f'SELECT value{p2} FROM legendary WHERE user_id={message.from_user.id} AND id={p1}') as cursor:
@@ -343,7 +376,6 @@ async def upgrade(message: Message):
                     kol = row[0]
                     if kol < price[1]:
                         status = f"Недостаточно {param1[7]}❌"
-        # if 1 <= int(text[2]) <= 3 and 1 <= int(text[1]) <= num and value <= 0.9 and kol >= 50:
 
         if status == "OK":
             """Запись в БД, ответ пользователю"""
@@ -497,10 +529,15 @@ async def naming(message: Message):
                 if count > 0:
                     if 1 <= int(id_) <= count:
                         """Проверка на возможную SQL-инъекцию"""
-                        BOOL = '"' in name_ or "'" in name_ or ')' in name_ or '}' in name_ or '--' in name_ or '=' in name_ or \
-                            'union' in name_.lower() or 'concat' in name_.lower() or '*' in name_ or ';' in name_ or '@' in name_ or \
-                            '|' in name_ or '%' in name_ or '#' in name_ or 'select' in name_.lower() or 'where' in name_.lower() or \
-                            '/' in name_ or 'delete' in name_.lower()
+                        BOOL = '"' in name_ or "'" in name_ or ')' in name_ or \
+                               ']' in name_ or '}' in name_ or '--' in name_ or \
+                               '=' in name_ or 'union' in name_.lower() or \
+                               'concat' in name_.lower() or '*' in name_ or \
+                               ';' in name_ or '@' in name_ or '|' in name_ or \
+                               (r'\ '[0]) in name_ or '%' in name_ or \
+                               '#' in name_ or '&' in name_ or '$' in name_ or \
+                               'select' in name_.lower() or 'where' in name_.lower() or \
+                               '/' in name_ or 'delete' in name_.lower()
                         if not BOOL:
                             """Запись в БД, ответ пользователю"""
                             await db.execute(
@@ -511,7 +548,8 @@ async def naming(message: Message):
                             await message.reply('Недопустимые символы❌')
                             async with db.execute(f'SELECT * FROM admins') as cursor:
                                 async for ADMIN_ID in cursor:
-                                    await bot.send_message(ADMIN_ID[0], f'Попытка SQL-инъекции\nID: {message.from_user.id}\nТекст: {name_}')
+                                    await bot.send_message(ADMIN_ID[0],
+                                                           f'Попытка SQL-инъекции\nID: {message.from_user.id}\nТекст: {name_}')
                     else:
                         await message.reply('Неверный ID❌')
                 else:
@@ -535,7 +573,8 @@ async def timezone(message: Message):
             try:
                 if -15 <= int(timer) <= 11:
                     """Получение значений"""
-                    async with db.execute(f'SELECT last, time FROM stat WHERE user_id={message.from_user.id}') as cursor:
+                    async with db.execute(
+                            f'SELECT last, time FROM stat WHERE user_id={message.from_user.id}') as cursor:
                         async for row in cursor:
                             last = row[0]
                             old_time = row[1]
@@ -543,14 +582,29 @@ async def timezone(message: Message):
                     """Смена часового пояса в записи в БД"""
                     if not (last is None):
                         if int(timer) - int(old_time) >= 0:
-                            new_last = (datetime.datetime(day=int(last[0:2]), month=int(last[3:5]), year=int(last[6:10]),
-                                                          hour=int(last[11:13]), minute=int(last[14:16]), second=int(last[17:19])
-                                                          ) + datetime.timedelta(hours=int(timer) - int(old_time))).strftime("%d.%m.%Y %X")
+                            new_last = (datetime.datetime(day=int(last[0:2]),
+                                                          month=int(last[3:5]),
+                                                          year=int(last[6:10]),
+                                                          hour=int(last[11:13]),
+                                                          minute=int(last[14:16]),
+                                                          second=int(last[17:19])
+                                                          ) +
+                                        datetime.timedelta(hours=
+                                                           int(timer) - int(old_time)
+                                                           )
+                                        ).strftime("%d.%m.%Y %X")
                         else:
-                            new_last = (datetime.datetime(day=int(last[0:2]), month=int(last[3:5]), year=int(last[6:10]),
-                                                          hour=int(last[11:13]), minute=int(last[14:16]), second=int(last[17:19])
-                                                          ) - datetime.timedelta(hours=int(old_time) - int(timer))).strftime(
-                                "%d.%m.%Y %X")
+                            new_last = (datetime.datetime(day=int(last[0:2]),
+                                                          month=int(last[3:5]),
+                                                          year=int(last[6:10]),
+                                                          hour=int(last[11:13]),
+                                                          minute=int(last[14:16]),
+                                                          second=int(last[17:19])
+                                                          ) -
+                                        datetime.timedelta(hours=
+                                                           int(old_time) - int(timer)
+                                                           )
+                                        ).strftime("%d.%m.%Y %X")
                         await db.execute(
                             f'UPDATE stat SET last="{new_last}" WHERE user_id={message.from_user.id}')
 
@@ -579,33 +633,7 @@ async def timezone(message: Message):
 
 # @dp.message(Command(commands=['promo', 'promocode', 'activate']))
 # async def promo(message: Message):
-#     code_ = ''
-#     type_ = ''
-#     block = ''
-#     bonus = 0
-#     balance = 0
 #     text = message.text.split()
-#     if len(text) >= 2:
-#         code_ = text[1]
-#         async with aiosqlite.connect(DB_NAME) as db:
-#             async with db.execute(f'SELECT * FROM promo WHERE text={code_}') as cursor:
-#                 async for row in cursor:
-#                     if row is None:
-#                         await message.reply('Неверный промокод❌')
-#                     else:
-#                         type_ = row[1]
-#                         block = row[2]
-#                         bonus = row[3]
-#                         if type_ == 'kol':
-#                             if block >= 1:
-#                                 async with db.execute(f'SELECT kol FROM stat WHERE user_id={message.from_user.id}') as cursor:
-#                                     async for row in cursor:
-#                                         if row is None:
-#                                             balance = 0
-#                                         else:
-#                                             balance = row[0]
-#     else:
-#         await message.reply('Промокод не введён❌')
 
 
 async def on_startup():
