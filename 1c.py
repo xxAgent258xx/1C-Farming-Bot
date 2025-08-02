@@ -116,7 +116,7 @@ async def select_from_db(query: str) -> list:
         return ans
 
 
-async def insert_into_db(query: str):
+async def insert_into_db(query: str) -> None:
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute(query)
         await db.commit()
@@ -129,7 +129,7 @@ logging.basicConfig(level=logging.INFO)
 
 """Стартовое сообщение с списком команд"""
 @dp.message(CommandStart())
-async def start(message: Message):
+async def start(message: Message) -> None:
     await insert_into_db(f"INSERT INTO stat(user_id, kol, koff, gets_kol, time) VALUES ({message.from_user.id}, 0, 0, 0, 0)")
 
     await message.reply(
@@ -154,9 +154,10 @@ async def start(message: Message):
 
 """Получение валюты"""
 @dp.message(Command(commands=['get']))
-async def get(message: Message):
+async def get(message: Message) -> None:
     lvl_up = False
     maybe = False
+    have_bonus = False
     bonus = 0
 
     """Получение значений из БД"""
@@ -184,9 +185,10 @@ async def get(message: Message):
     get_kol = koffs[koff_index]
 
     """Проверка на переход на новый уровень"""
-    if koff_index + 1 < len(koffs_kol):
+    if koff_index + 2 < len(koffs_kol):
         if gets_kol == koffs_kol[koff_index + 1]:
             lvl_up = True
+            koff_index += 1
 
     """Проверка на соответствие времени"""
     if last is None:
@@ -199,17 +201,14 @@ async def get(message: Message):
                         ), 1
                     ) * get_kol
         if bonus_date is None:
+            have_bonus = True
             get_kol += bonus
-            await insert_into_db(f'UPDATE stat SET bonus_date="{
-            datetime.date.today().strftime("%d.%m.%Y")
-            }" WHERE user_id={message.from_user.id}')
         else:
             if (await check_min_datetime(datetime.date.today().strftime("%d.%m.%Y %X"),
                                          bonus_date + " 00:00:00")) == bonus_date + " 00:00:00":
+                have_bonus = True
                 get_kol += bonus
-                await insert_into_db(f'UPDATE stat SET bonus_date="{
-                datetime.date.today().strftime("%d.%m.%Y")
-                }" WHERE user_id={message.from_user.id}')
+        
 
         """Время следующего возможного получения валюты после времени из БД"""
         h2 = (datetime.datetime(day=int(last[0:2]),
@@ -229,24 +228,24 @@ async def get(message: Message):
         """Обновление БД, ответ пользователю"""
         await insert_into_db(
             f'UPDATE stat SET kol={kol + get_kol}, last="{dtime}", koff={
-            koff_index + (1 if lvl_up else 0)}, gets_kol={
-            gets_kol} WHERE user_id={message.from_user.id}')
+            koff_index}, gets_kol={gets_kol} WHERE user_id={
+            message.from_user.id}')
 
         await message.reply(
 
             f'{message.from_user.full_name}, вы получили {get_kol}{param1[13]}{
                 
-            " (Ежедневный бонус: " + str(bonus) + param1[13] + ")" if get_kol != koffs[koff_index] else ""}\n'
+            " (Ежедневный бонус: " + str(bonus) + param1[13] + ")" if have_bonus else ""}\n'
                 
             f'Возвращайтесь через 2 часа. Всего: {kol + get_kol}{param1[13]}\n'
                 
             f'{"Новый уровень! " if lvl_up else ""
             }Ваш уровень: {
-            koff_index + 1 + (1 if lvl_up else 0)} (x{
-            koffs[koff_index + (1 if lvl_up else 0)]}). {
+            koff_index + 1} (x{
+            koffs[koff_index]}). {
                 
             "До следующего уровня: " + 
-            str(koffs_kol[koff_index + 1 + (1 if lvl_up else 0)] - gets_kol) if
+            str(koffs_kol[koff_index + 1] - gets_kol) if
             koff_index + 1 != len(koffs_kol) else ""}')
 
     else:
@@ -692,3 +691,4 @@ async def main():
 
 if __name__ == '__main__':
     asyncio.run(main())
+
