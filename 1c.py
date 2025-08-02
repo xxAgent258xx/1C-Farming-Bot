@@ -184,8 +184,9 @@ async def get(message: Message) -> None:
     """Количество полученной валюты"""
     get_kol = koffs[koff_index]
 
-    """Проверка на переход на новый уровень"""
+    """Проверка на максимальный уровень (+2 - за 0-based индекс и за следующий уровень)"""
     if koff_index + 2 < len(koffs_kol):
+        """Проверка на переход на новый уровень"""
         if gets_kol == koffs_kol[koff_index + 1]:
             lvl_up = True
             koff_index += 1
@@ -208,7 +209,11 @@ async def get(message: Message) -> None:
                                          bonus_date + " 00:00:00")) == bonus_date + " 00:00:00":
                 have_bonus = True
                 get_kol += bonus
-        
+
+        if have_bonus:
+            await insert_into_db(f'UPDATE stat SET bonus_date="{
+            datetime.date.today().strftime("%d.%m.%Y")
+            }" WHERE user_id={message.from_user.id}')
 
         """Время следующего возможного получения валюты после времени из БД"""
         h2 = (datetime.datetime(day=int(last[0:2]),
@@ -239,10 +244,8 @@ async def get(message: Message) -> None:
                 
             f'Возвращайтесь через 2 часа. Всего: {kol + get_kol}{param1[13]}\n'
                 
-            f'{"Новый уровень! " if lvl_up else ""
-            }Ваш уровень: {
-            koff_index + 1} (x{
-            koffs[koff_index]}). {
+            f'{"Новый уровень! " if lvl_up else ""}Ваш уровень: {
+            koff_index + 1} (x{koffs[koff_index]}). {
                 
             "До следующего уровня: " + 
             str(koffs_kol[koff_index + 1] - gets_kol) if
@@ -691,4 +694,5 @@ async def main():
 
 if __name__ == '__main__':
     asyncio.run(main())
+
 
