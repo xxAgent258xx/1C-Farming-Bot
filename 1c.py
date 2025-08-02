@@ -133,8 +133,10 @@ async def start(message: Message) -> None:
     await insert_into_db(f"INSERT INTO stat(user_id, kol, koff, gets_kol, time) VALUES ({message.from_user.id}, 0, 0, 0, 0)")
 
     await message.reply(
-        f'Добро пожаловать в увлекательную игру!\nЗдесь ты сможешь получать {param1[9]} и обменивать их на легендарные!\n'
+        'Добро пожаловать в увлекательную игру!\n'
+        f'Здесь ты сможешь получать {param1[9]} и обменивать их на легендарные!\n'
         '📋Список команд:\n'
+              
         f'/get - получить {param1[3]}{param1[13]}\n'
         f'/buy - купить легендарн{add1} {param2[3]} за {price[0]}{param1[13]}\n'
         '/upgrade {№} {#} - прокачать ' +
@@ -257,7 +259,7 @@ async def get(message: Message) -> None:
 
 """Покупка легендарного персонажа"""
 @dp.message(Command(commands=['buy']))
-async def buy(message: Message):
+async def buy(message: Message) -> None:
     balance = 0
     num = 1
     """Подключение к БД"""
@@ -300,7 +302,7 @@ async def buy(message: Message):
 
 """Профиль"""
 @dp.message(Command(commands=['me']))
-async def me(message: Message):
+async def me(message: Message) -> None:
     text = ''
     prof = []
     count = 0
@@ -361,7 +363,7 @@ async def me(message: Message):
 
 """Прокачка легендарного персонажа"""
 @dp.message(Command(commands=['upgrade']))
-async def upgrade(message: Message):
+async def upgrade(message: Message) -> None:
     status = "OK"
     num = 0
     text = message.text.split()
@@ -431,7 +433,7 @@ async def upgrade(message: Message):
 
 """Сделать персонажа коллекционным"""
 @dp.message(Command(commands=['collect', 'collectible', 'collected']))
-async def collect(message: Message):
+async def collect(message: Message) -> None:
     status = "OK"
     enable_ = True
     num = 0
@@ -519,7 +521,7 @@ async def collect(message: Message):
 
 
 @dp.message(Command(commands=['new_admin', 'add_admin']))
-async def new_admin(message: Message):
+async def new_admin(message: Message) -> None:
     check = False
     id_ = 0
     if len(message.text.split()) >= 2:
@@ -544,7 +546,7 @@ async def new_admin(message: Message):
 
 """Присвоение имени легендарному персонажу"""
 @dp.message(Command(commands=['name']))
-async def naming(message: Message):
+async def naming(message: Message) -> None:
     if len(message.text.split()) >= 3:
         id_ = message.text.split()[1]
         name_ = ' '.join(message.text.split()[2:])
@@ -596,7 +598,7 @@ async def naming(message: Message):
 
 """Смена часового пояса"""
 @dp.message(Command(commands=['time', 'timezone', 'set_time']))
-async def timezone(message: Message):
+async def timezone(message: Message) -> None:
     if len(message.text.split()) >= 2:
         timer = message.text.split()[1]
         last = None
@@ -666,7 +668,7 @@ async def timezone(message: Message):
 
 
 # @dp.message(Command(commands=['promo', 'promocode', 'activate']))
-# async def promo(message: Message):
+# async def promo(message: Message) -> None:
 #     text = message.text.split()
 
 
@@ -694,5 +696,6 @@ async def main():
 
 if __name__ == '__main__':
     asyncio.run(main())
+
 
 
