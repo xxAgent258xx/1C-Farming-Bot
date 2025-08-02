@@ -175,12 +175,12 @@ async def get(message: Message) -> None:
     if int(timezona) >= 0:
         dtime = (
                 datetime.datetime.now() +
-                datetime.timedelta(hours=int(timezona))
+                datetime.timedelta(hours=timezona)
         ).strftime("%d.%m.%Y %X")
     else:
         dtime = (
                 datetime.datetime.now() -
-                datetime.timedelta(hours=abs(int(timezona)))
+                datetime.timedelta(hours=abs(timezona))
         ).strftime("%d.%m.%Y %X")
 
     """Количество полученной валюты"""
@@ -696,6 +696,7 @@ async def main():
 
 if __name__ == '__main__':
     asyncio.run(main())
+
 
 
 
