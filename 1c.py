@@ -207,10 +207,11 @@ async def start(message: Message, command: CommandObject) -> None:
         f'прокачанн{add1} легендарн{add1} {param2[3]} коллекционн{add2} за {price[2]}{param1[13]}\n'
         '/name {№} {""} - задать имя ' + f'коллекционн{add3} {param2[2]}\n'
         '/me - посмотреть профиль\n'
+        '/promo {""} - активировать промокод'
         '/time {ЧЧ} - сменить разницу времени с МСК\n'
 
         '\n{№} - номер ' + f'{param2[1]}, с которым совершается действие\n'
-        '{""} - имя ' + f'{param2[1]}\n'
+        '{""} - cтрока\n'
         '{ЧЧ} - разница во времени от -15 до +11\n'
         '{#} - номер характеристики (1, 2 или 3)')
 
@@ -724,10 +725,7 @@ async def timezone(message: Message) -> None:
 
                     """Запись в БД, ответ пользователю"""
                     await insert_into_db(
-                        f'UPDATE stat SET last="{new_last}" WHERE user_id={message.from_user.id}')
-
-                    await insert_into_db(
-                        f'UPDATE stat SET time={timer} WHERE user_id={message.from_user.id}')
+                        f'UPDATE stat SET last="{new_last}", time={timer} WHERE user_id={message.from_user.id}')
 
                     await message.reply(f'Время изменено на МСК{"+" if timer >= 0 else ""}{timer}')
                 else:
@@ -775,7 +773,7 @@ async def activate(message: Message, promo="") -> None:
             if "balance" in keys:
                 kol = await select_from_db(f"SELECT kol FROM stat WHERE user_id={message.from_user.id}")
                 await insert_into_db(f"UPDATE stat SET kol={kol[0] + bonus["balance"]} WHERE user_id={message.from_user.id}")
-                await message.reply(f"Зачислено {kol}{param1[13]}")
+                await message.reply(f"Зачислено {bonus["balance"]}{param1[13]}")
             if "buy" in keys:
                 await buy(message, promo=bonus["buy"])
 
