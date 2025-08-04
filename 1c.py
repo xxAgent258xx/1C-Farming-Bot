@@ -14,8 +14,8 @@ from tokens import FARMING_BOT_TOKEN
 """ПАРАМЕТРЫ ПРИЛОЖЕНИЯ"""
 
 """Название валюты во всех падежах, род/число в начальной форме ('М' / 'Ж' / 'СР' / 'МН'), эмодзи"""
-param1 = ["вуппит", "вуппита", "вуппиту", "вуппита", "вуппитом", "вуппите",
-          "вуппиты", "вуппитов", "вуппитам", "вуппитов", "вуппитами", "вуппитах",
+param1 = ["вуппкоин", "вуппкоина", "вуппкоину", "вуппкоин", "вуппкоином", "вуппкоине",
+          "вуппкоины", "вуппкоинов", "вуппкоинам", "вуппкоины", "вуппкоинами", "вуппкоинах",
           "М", "🧸"]
 
 """Название персонажа во всех падежах, род/число в начальной форме ('М' / 'Ж' / 'СР' / 'МН'), эмодзи обычного и легендарного"""
@@ -136,6 +136,16 @@ async def change_timedelta(date: str, delta: int) -> str:
     return ans
 
 
+async def str_to_datetime(date: str) -> datetime.datetime:
+    ans = datetime.datetime(day=int(date[0:2]),
+                            month=int(date[3:5]),
+                            year=int(date[6:10]),
+                            hour=int(date[11:13]),
+                            minute=int(date[14:16]),
+                            second=int(date[17:19]))
+    return ans
+
+
 async def insert_into_db(query: str) -> None:
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute(query)
@@ -184,13 +194,8 @@ logging.basicConfig(level=logging.INFO)
 @dp.message(CommandStart())
 async def start(message: Message, command: CommandObject) -> None:
 
-    if command.args:
-        """Проверка на наличие промокода"""
-        if not ((await get_promo(command.args)) is None):
-            await activate(message, promo=command.args)
-
-    """Проверка на нового пользователя"""
     if len(await select_from_db(f'SELECT * FROM stat WHERE user_id={message.from_user.id}')) == 0:
+        """Запись нового пользователя"""
         await insert_into_db(
             f"INSERT INTO stat(user_id, kol, koff, gets_kol, time) VALUES ({message.from_user.id}, 0, 0, 0, 0)")
 
@@ -201,19 +206,27 @@ async def start(message: Message, command: CommandObject) -> None:
 
         f'/get - получить {param1[3]}{param1[13]}\n'
         f'/buy - купить легендарн{add1} {param2[3]} за {price[0]}{param1[13]}\n'
-        '/upgrade {№} {#} - прокачать ' +
+        '/upgrade {1} {2} - прокачать ' +
         f'легендарн{add1} {param2[3]} за {price[1]}{param1[13]}\n'
-        '/collect {№} - сделать полностью ' +
+        '/collect {1} - сделать полностью ' +
         f'прокачанн{add1} легендарн{add1} {param2[3]} коллекционн{add2} за {price[2]}{param1[13]}\n'
-        '/name {№} {""} - задать имя ' + f'коллекционн{add3} {param2[2]}\n'
+        '/name {1} {3} - задать имя ' + f'коллекционн{add3} {param2[2]}\n'
         '/me - посмотреть профиль\n'
-        '/promo {""} - активировать промокод'
-        '/time {ЧЧ} - сменить разницу времени с МСК\n'
+        '/promo {4} - активировать промокод'
+        '/time {5} - сменить разницу времени с МСК\n'
 
-        '\n{№} - номер ' + f'{param2[1]}, с которым совершается действие\n'
-        '{""} - cтрока\n'
-        '{ЧЧ} - разница во времени от -15 до +11\n'
-        '{#} - номер характеристики (1, 2 или 3)')
+        '\nПараметры (указываются без фигурных скобок)\n'
+        '{1} - номер ' + f'{param2[1]}, с которым совершается действие\n'
+        '{2} - номер характеристики (1, 2 или 3)\n'
+        '{3} - имя ' + f'{param2[1]}\n'
+        '{4} - промокод\n'
+        '{5} - разница во времени от -15 до +11\n'
+)
+
+    """Проверка на наличие промокода"""
+    if command.args:
+        if not ((await get_promo(command.args)) is None):
+            await activate(message, promo=command.args)
 
 
 """Получение валюты"""
@@ -224,6 +237,7 @@ async def get(message: Message) -> None:
     have_bonus = False
     bonus = 0
     DELTA = 2
+    h2 = ""
 
     """Получение значений из БД"""
     user = await select_from_db(
@@ -329,7 +343,13 @@ async def get(message: Message) -> None:
             koff_index + 1 != len(koffs_kol) else ""}')
 
     else:
-        await message.reply(f'Рано получать {param1[9]}❌')
+        dtime = await str_to_datetime(dtime)
+        h2 = await str_to_datetime(h2)
+        delta = h2 - dtime
+        HH = delta.days * 24 + delta.seconds // 3600
+        MM = delta.seconds // 60 - delta.seconds // 3600 * 60
+        await message.reply(f'Рано получать {param1[9]}!\n'
+                            f'Возвращайтесь через {HH}ч {MM}мин')
 
 
 """Покупка легендарного персонажа"""
@@ -433,13 +453,26 @@ async def me(message: Message) -> None:
 
     """Получение информации о легендарных персонажах"""
     cursor = await select_from_db(f'SELECT * FROM legendary WHERE user_id={message.from_user.id}')
-    for row in cursor:
-        count += 1
-        text += (f'№{row[0]}, {row[2]}{" " + row[3] if row[3] else ""}, '
-                 f'{param3[0]}: {row[4] if row[4] else row[5]}, '
-                 f'{param3[1]}: {row[6] if row[6] else row[7]}, '
-                 f'{param3[2]}: {row[8] if row[8] else row[9]}\n')
+    if type(cursor[0]) is type([]):
+        for row in cursor:
+            count += 1
+            text += (f'№{row[0]}, {row[2]}{" " + row[3] if row[3] else ""}, '
+                     f'{param3[0]}: {row[4] if row[4] else row[5]}, '
+                     f'{param3[1]}: {row[6] if row[6] else row[7]}, '
+                     f'{param3[2]}: {row[8] if row[8] else row[9]}\n')
+    else:
+        count = 1
+        text += (f'№{cursor[0]}, {cursor[2]}{" " + cursor[3] if cursor[3] else ""}, '
+                 f'{param3[0]}: {cursor[4] if cursor[4] else cursor[5]}, '
+                 f'{param3[1]}: {cursor[6] if cursor[6] else cursor[7]}, '
+                 f'{param3[2]}: {cursor[8] if cursor[8] else cursor[9]}\n')
 
+    dtime = await str_to_datetime(dtime)
+    h2 = await str_to_datetime(h2)
+    delta = h2 - dtime
+    HH = delta.days * 24 + delta.seconds // 3600
+    MM = delta.seconds // 60 - delta.seconds // 3600 * 60
+    HHMM = 'через ' + str(HH) + 'ч ' + str(MM) + 'мин'
     """Ответ пользователю"""
     await message.reply(f'🆔ID: {prof[0]}\n'
                         f'{param1[13]}{param1[7].capitalize()}: {prof[1]}\n'
@@ -447,8 +480,8 @@ async def me(message: Message) -> None:
                         f'↗️Ваш уровень: {prof[4] + 1} (x{koffs[prof[4]]})\n'
                         f'{"🆙До следующего уровня: " +
                            str(koffs_kol[prof[4] + 1] - prof[3]) if prof[4] + 1 != len(koffs_kol) else ""}\n'
-                        f'⏰Следующее получение: {h2 if BOOL else 'уже доступно! /get'}\n'
-                        f'\n⚙️Часовой пояс: МСК{"+" if prof[5] >= 0 else ""}{prof[5]}'
+                        f'⏰Следующее получение: {HHMM if BOOL else 'уже доступно! /get'}\n'
+                        # f'\n⚙️Часовой пояс: МСК{"+" if prof[5] >= 0 else ""}{prof[5]}'
                         )
     if count > 0:
         await message.reply(f'{param2[14]}Легендарных {param2[7]}: {count}\n{text}')
