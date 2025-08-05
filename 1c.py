@@ -74,6 +74,7 @@ TOKEN = FARMING_BOT_TOKEN
 
 """Меню бота"""
 main_keyboard = ReplyKeyboardMarkup(keyboard=[
+    [KeyboardButton(text='▶️ Старт'), KeyboardButton(text='⬇️ Свернуть меню')],
     [KeyboardButton(text=f'{param1[13]} Получить {param1[9]}'), KeyboardButton(text=f'{param2[13]} Купить {param2[3]}')],
     [KeyboardButton(text=f'{param2[13]} Улучшить {param2[3]}'), KeyboardButton(text=f'{param2[13]} Имя {param2[1]}')],
     [KeyboardButton(text=f'{param2[14]} Коллекционный {param2[0]}'), KeyboardButton(text='👤 Профиль')],
@@ -229,14 +230,17 @@ class Form4(StatesGroup):
 
 START_TEXT =\
     'Добро пожаловать в увлекательную игру!\n' + \
-    f'Здесь ты сможешь получать {param1[9]} и обменивать их на легендарные {param2[6]}!\n' + \
+    f'Здесь ты сможешь получать {param1[9]}, покупать легендарные {param2[6]}, прокачивать их и делать коллекционными!\n' +\
+    f'Список команд: /menu'
+
+CMD_TEXT =\
     '📋Список команд:\n' + \
     f'/get - получить {param1[3]}{param1[13]}\n' + \
-    f'/buy - купить легендарн{add1} {param2[3]} за {price[0]}{param1[13]}\n' + \
+    f'/buy - купить легендарн{add1} {param2[3]} за {price[0]} {param1[7]}{param1[13]}\n' + \
     '/upgrade {1} {2} - прокачать ' + \
-    f'легендарн{add1} {param2[3]} за {price[1]}{param1[13]}\n' + \
-    '/collect {1} - сделать полностью ' + \
-    f'прокачанн{add1} легендарн{add1} {param2[3]} коллекционн{add2} за {price[2]}{param1[13]}\n' + \
+    f'легендарн{add1} {param2[3]} за {price[1]} {param1[7]}{param1[13]}\n' + \
+    '/collect {1} - сделать ' + \
+    f'легендарн{add1} {param2[3]} коллекционн{add2} за {price[2]} {param1[7]}{param1[13]}\n' + \
     '/name {1} {3} - задать имя ' + f'коллекционн{add3} {param2[2]}\n' + \
     '/me - посмотреть профиль\n' + \
     '/promo {4} - активировать промокод' + \
@@ -250,13 +254,13 @@ START_TEXT =\
 
 
 """Отдельная обработка кнопок, которые имеют параметры"""
-@dp.message(F.text == main_keyboard.keyboard[3][0].text)
+@dp.message(Command(commands=['menu']))
+@dp.message(F.text == main_keyboard.keyboard[4][0].text)
 async def start_button(message: Message):
-    await message.reply(START_TEXT[START_TEXT.index('📋'):],
-                        reply_markup=main_keyboard)
+    await message.reply(CMD_TEXT, reply_markup=main_keyboard)
 
 
-@dp.message(F.text == main_keyboard.keyboard[1][0].text)
+@dp.message(F.text == main_keyboard.keyboard[2][0].text)
 async def upgrade_button(message: Message, state: FSMContext):
     num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
     if num is None:
@@ -283,7 +287,7 @@ async def process_upgrade_button(message: Message, state: FSMContext):
     await state.clear()
 
 
-@dp.message(F.text == main_keyboard.keyboard[1][1].text)
+@dp.message(F.text == main_keyboard.keyboard[2][1].text)
 async def name_button(message: Message, state: FSMContext):
     max_num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
     if max_num is None:
@@ -310,7 +314,7 @@ async def process_name_button(message: Message, state: FSMContext):
     await state.clear()
 
 
-@dp.message(F.text == main_keyboard.keyboard[2][0].text)
+@dp.message(F.text == main_keyboard.keyboard[3][0].text)
 async def collect_button(message: Message, state: FSMContext):
     max_num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
     if max_num is None:
@@ -332,7 +336,7 @@ async def process_collect_button(message: Message, state: FSMContext):
     await state.clear()
 
 
-@dp.message(F.text == main_keyboard.keyboard[3][1].text)
+@dp.message(F.text == main_keyboard.keyboard[4][1].text)
 async def time_button(message: Message, state: FSMContext):
     await message.reply("Выберите свой часовой пояс из списка",
                         reply_markup=time_keyboard)
@@ -355,12 +359,13 @@ async def process_time_button(message: Message, state: FSMContext):
 
 """Стартовое сообщение с списком команд"""
 @dp.message(CommandStart())
-async def start(message: Message, command: CommandObject) -> None:
+@dp.message(F.text == main_keyboard.keyboard[0][0].text)
+async def start(message: Message, command: CommandObject = CommandObject()) -> None:
 
     if len(await select_from_db(f'SELECT * FROM stat WHERE user_id={message.from_user.id}')) == 0:
         """Запись нового пользователя"""
         await insert_into_db(
-            f"INSERT INTO stat(user_id, kol, koff, gets_kol, time) VALUES ({message.from_user.id}, 0, 0, 0, 0)")
+            f"INSERT INTO stat(user_id, kol, koff, gets_kol, time, streak, activity) VALUES ({message.from_user.id}, 0, 0, 0, 0, 1, 0)")
 
     await message.reply(START_TEXT, reply_markup=main_keyboard)
 
@@ -370,8 +375,13 @@ async def start(message: Message, command: CommandObject) -> None:
             await activate(message, promo=command.args)
 
 
+@dp.message(F.text == main_keyboard.keyboard[0][1].text)
+async def turn_down(message: Message):
+    await message.reply("Клавиатура скрыта.", reply_markup=ReplyKeyboardRemove())
+
+
 """Получение валюты"""
-@dp.message(F.text == main_keyboard.keyboard[0][0].text)
+@dp.message(F.text == main_keyboard.keyboard[1][0].text)
 @dp.message(Command(commands=['get']))
 async def get(message: Message) -> None:
     lvl_up = False
@@ -379,6 +389,7 @@ async def get(message: Message) -> None:
     have_bonus = False
     bonus = 0
     DELTA = 2
+    streak = 1
     h2 = ""
 
     """Получение значений из БД"""
@@ -433,7 +444,7 @@ async def get(message: Message) -> None:
 
     else:
         """Бонус за новый день (не выдаётся при первом запуске)"""
-        user_date = await change_timedelta(datetime.date.today().strftime("%d.%m.%Y %X"), timezona)
+        user_date = datetime.date.today().strftime("%d.%m.%Y %X")
         bonus = max(int(random.choice(chance) *
                         random.choice([7.5, 10, 12.5])), 1
                     ) * get_kol
@@ -448,6 +459,16 @@ async def get(message: Message) -> None:
             await insert_into_db(f'UPDATE stat SET bonus_date="{
             user_date.split()[0]}" WHERE user_id={message.from_user.id}')
 
+            """Проверка на серию входов"""
+            tomorrow = await change_timedelta(bonus_date + " 00:00:00", 24)
+            if (await check_min_datetime(user_date, tomorrow)) == 0:
+                streak = (await select_from_db(f"SELECT streak FROM stat WHERE user_id={message.from_user.id}"))[0] + 1
+                await insert_into_db(f'UPDATE stat SET streak={streak} WHERE user_id={message.from_user.id}')
+
+            else:
+                streak = 0
+                await insert_into_db(f'UPDATE stat SET streak=1 WHERE user_id={message.from_user.id}')
+
         """Время следующего возможного получения валюты после времени из БД"""
         h2 = await change_timedelta(last, DELTA)
 
@@ -458,7 +479,7 @@ async def get(message: Message) -> None:
     if maybe:
         """Обновление БД, ответ пользователю"""
         await insert_into_db(
-            f'UPDATE stat SET kol={kol + get_kol}, last="{dtime}", koff={
+            f'UPDATE stat SET kol={kol + get_kol + streak // 3}, last="{dtime}", koff={
             koff_index}, gets_kol={gets_kol} WHERE user_id={
             message.from_user.id}')
 
@@ -471,15 +492,17 @@ async def get(message: Message) -> None:
 
         await message.reply(
 
-            f'{message.from_user.full_name}, вы получили {get_kol}{param1[13]}{
+            f'{message.from_user.full_name}, вы получили {get_kol + streak // 3}{param1[13]}\n'
 
-            " (Ежедневный бонус: " + str(bonus) + param1[13] + ")" if have_bonus else ""}\n'
+            f'{"📦Ежедневный бонус: " + str(bonus) + param1[13] + "\n" if have_bonus else ""}'
+            f'{"🔥Ежедневная серия: " + str(streak) + " (бонус: " + str(streak // 3) + param1[13] + ")\n" if streak > 1 else ""
+            }{"💥Ежедневная серия прервана!\n" if not streak else ""}'
 
-            f'Возвращайтесь через {DELTA} час{add}. Всего: {kol + get_kol}{param1[13]}\n'
+            f'⏰Возвращайтесь через {DELTA} час{add}.\n'
+            f'Всего: {kol + get_kol + streak // 3}{param1[13]}\n'
 
-            f'{"Новый уровень! " if lvl_up else ""}Ваш уровень: {
-            koff_index + 1} (x{koffs[koff_index]}). {
-
+            f'{"🆙Новый уровень! " if lvl_up else ""}Ваш уровень: {
+            koff_index + 1} (x{koffs[koff_index]}). \n{
             "До следующего уровня: " +
             str(koffs_kol[koff_index + 1] - gets_kol) if
             koff_index + 1 != len(koffs_kol) else ""}')
@@ -496,7 +519,7 @@ async def get(message: Message) -> None:
 
 
 """Покупка легендарного персонажа"""
-@dp.message(F.text == main_keyboard.keyboard[0][1].text)
+@dp.message(F.text == main_keyboard.keyboard[1][1].text)
 @dp.message(Command(commands=['buy']))
 async def buy(message: Message, promo=0) -> None:
     koff = 1
@@ -581,11 +604,14 @@ async def buy(message: Message, promo=0) -> None:
 
 
 """Профиль"""
-@dp.message(F.text == main_keyboard.keyboard[2][1].text)
+@dp.message(F.text == main_keyboard.keyboard[3][1].text)
 @dp.message(Command(commands=['me']))
 async def me(message: Message) -> None:
-    text = ''
-    count = 0
+    text1 = ''
+    count1 = 0
+    text2 = ''
+    count2 = 0
+
     h2 = ""
 
     """Получение профиля пользователя"""
@@ -602,20 +628,34 @@ async def me(message: Message) -> None:
     """Получение информации о легендарных персонажах"""
     cursor = await select_from_db(f'SELECT * FROM legendary WHERE user_id={message.from_user.id}')
     if len(cursor) == 0:
-        count = 0
+        pass
     elif type(cursor[0]) is type([]):
         for row in cursor:
-            count += 1
-            text += (f'№{row[0]}, {row[2]}{" " + row[3] if row[3] else ""}, '
-                     f'{param3[0]}: {row[4] if row[4] else row[5]}, '
-                     f'{param3[1]}: {row[6] if row[6] else row[7]}, '
-                     f'{param3[2]}: {row[8] if row[8] else row[9]}\n')
+            if row[4]:
+                count2 += 1
+                text2 += (f'№{row[0]}, {row[2]}{" " + row[3] if row[3] else ""}, '
+                         f'{param3[0]}: {row[4] if row[4] else row[5]}, '
+                         f'{param3[1]}: {row[6] if row[6] else row[7]}, '
+                         f'{param3[2]}: {row[8] if row[8] else row[9]}\n')
+            else:
+                count1 += 1
+                text1 += (f'№{row[0]}, {row[2]}{" " + row[3] if row[3] else ""}, '
+                         f'{param3[0]}: {row[4] if row[4] else row[5]}, '
+                         f'{param3[1]}: {row[6] if row[6] else row[7]}, '
+                         f'{param3[2]}: {row[8] if row[8] else row[9]}\n')
     else:
-        count = 1
-        text = (f'№{cursor[0]}, {cursor[2]}{" " + cursor[3] if cursor[3] else ""}, '
-                 f'{param3[0]}: {cursor[4] if cursor[4] else cursor[5]}, '
-                 f'{param3[1]}: {cursor[6] if cursor[6] else cursor[7]}, '
-                 f'{param3[2]}: {cursor[8] if cursor[8] else cursor[9]}\n')
+        if cursor[4]:
+            count2 = 1
+            text2 = (f'№{cursor[0]}, {cursor[2]}{" " + cursor[3] if cursor[3] else ""}, '
+                     f'{param3[0]}: {cursor[4] if cursor[4] else cursor[5]}, '
+                     f'{param3[1]}: {cursor[6] if cursor[6] else cursor[7]}, '
+                     f'{param3[2]}: {cursor[8] if cursor[8] else cursor[9]}\n')
+        else:
+            count1 = 1
+            text1 = (f'№{cursor[0]}, {cursor[2]}{" " + cursor[3] if cursor[3] else ""}, '
+                     f'{param3[0]}: {cursor[4] if cursor[4] else cursor[5]}, '
+                     f'{param3[1]}: {cursor[6] if cursor[6] else cursor[7]}, '
+                     f'{param3[2]}: {cursor[8] if cursor[8] else cursor[9]}\n')
 
     # dtime = await str_to_datetime(dtime)
     # h2 = await str_to_datetime(h2)
@@ -626,15 +666,16 @@ async def me(message: Message) -> None:
     """Ответ пользователю"""
     await message.reply(f'🆔ID: {prof[0]}\n'
                         f'{param1[13]}{param1[7].capitalize()}: {prof[1]}\n'
-                        f'{param1[13]}Всего получено: {prof[3]}\n'
+                        f'🫴Всего получено: {prof[3]} раз{"а" if (prof[3] % 10 in [2, 3, 4] and prof[3] // 10 % 10 != 1) else ""}\n'
                         f'↗️Ваш уровень: {prof[4] + 1} (x{koffs[prof[4]]})\n'
                         f'{"🆙До следующего уровня: " +
                            str(koffs_kol[prof[4] + 1] - prof[3]) if prof[4] + 1 != len(koffs_kol) else ""}\n'
                         f'⏰Следующее получение: {h2 if BOOL else 'уже доступно! /get'}\n'
                         # f'\n⚙️Часовой пояс: МСК{"+" if prof[5] >= 0 else ""}{prof[5]}'
                         )
-    if count > 0:
-        await message.reply(f'{param2[14]}Легендарных {param2[7]}: {count}\n{text}')
+    if count1 + count2:
+        await message.reply(f'{param2[13]}Легендарных {param2[7]}: {count1}\n{text1} \n'
+                            f'{param2[14]}Коллекционных {param2[7]}: {count2}\n{text2}')
 
 
 """Прокачка легендарного персонажа"""
@@ -710,7 +751,7 @@ async def upgrade(message: Message, p1="", p2="") -> None:
 
         await insert_into_db(f'UPDATE stat SET kol={kol - int(price[1] * koff)} WHERE user_id={message.from_user.id}')
         await insert_into_db(
-            f'UPDATE legendary SET value{p2} = {round(value + 0.1, 1)} WHERE user_id={message.from_user.id} AND id={text[1]}')
+            f'UPDATE legendary SET value{p2} = {round(value + 0.1, 1)} WHERE user_id={message.from_user.id} AND id={p1}')
 
         await message.reply(f'Вы прокачали {add} до {round(value + 0.1, 1)}!\n'
                             f'Ваш баланс: {kol - int(price[1] * koff)}{param1[13]}\n', reply_markup=main_keyboard)
@@ -782,14 +823,17 @@ async def collect(message: Message, num_="") -> None:
     if 1 <= num <= count:
         """Получение информации из БД"""
         cursor = await select_from_db(
-            f'SELECT value1, value2, value3 FROM legendary WHERE user_id={message.from_user.id} AND id={int(num)}')
+            f'SELECT class1, value1, value2, value3 FROM legendary WHERE user_id={message.from_user.id} AND id={int(num)}')
         if len(cursor) == 0:
             status = ("Неверные значения❌\n"
                       "Пример команды: /collect 1")
         else:
-            check_values = sum(cursor)
+            check_values = sum(cursor[1:])
             if check_values < 3:
                 status = f"{param2[0].capitalize()} недостаточно прокачан❌"
+
+            if not (cursor[0] is None):
+                status = f"{param2[0].capitalize()} уже коллекционный❌"
     else:
         status = ("Неверные значения❌\n"
                   "Пример команды: /collect 1")
@@ -798,6 +842,8 @@ async def collect(message: Message, num_="") -> None:
     balance = (await select_from_db(f'SELECT kol FROM stat WHERE user_id={message.from_user.id}'))[0]
     if balance < int(price[2] * koff):
         status = f"Недостаточно {param1[7]}❌"
+
+
 
     if status == "OK":
         """Присвоение уникальных характеристик"""
@@ -1021,6 +1067,12 @@ async def activate(message: Message, promo="") -> None:
 
     else:
         await message.reply("Вы уже активировали промокод❌")
+
+@dp.message()
+async def hi(message: Message):
+    if not (message.sticker is None):
+        # await message.reply(message.sticker.file_id)
+        await bot.send_sticker(message.chat.id, message.sticker.file_id)
 
 
 async def on_startup():
