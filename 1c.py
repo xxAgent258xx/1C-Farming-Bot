@@ -1,7 +1,10 @@
 import asyncio
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart, CommandObject
-from aiogram.types import Message
+from aiogram.types import Message, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.filters.state import State, StatesGroup
+from aiogram.fsm.context import FSMContext
 import aiosqlite
 import datetime
 import logging
@@ -18,7 +21,7 @@ param1 = ["вуппкоин", "вуппкоина", "вуппкоину", "ву�
           "вуппкоины", "вуппкоинов", "вуппкоинам", "вуппкоины", "вуппкоинами", "вуппкоинах",
           "М", "🧸"]
 
-"""Название персонажа во всех падежах, род/число в начальной форме ('М' / 'Ж' / 'СР' / 'МН'), эмодзи обычного и легендарного"""
+"""Название персонажа во всех падежах, род/число в начальной форме ('М' / 'Ж' / 'СР' / 'МН'), эмодзи обычного и коллекционного"""
 param2 = ["вуппит", "вуппита", "вуппиту", "вуппита", "вуппитом", "вуппите",
           "вуппиты", "вуппитов", "вуппитам", "вуппитов", "вуппитами", "вуппитах",
           "М", "🧸", "🎠"]
@@ -68,6 +71,23 @@ koffs_kol = [0, 10, 50, 100, 500, 1000, 2500, 5000, 10000, 25000, 50000]
 
 DB_NAME = '1c.db'
 TOKEN = FARMING_BOT_TOKEN
+
+"""Меню бота"""
+main_keyboard = ReplyKeyboardMarkup(keyboard=[
+    [KeyboardButton(text=f'{param1[13]} Получить {param1[9]}'), KeyboardButton(text=f'{param2[13]} Купить {param2[3]}')],
+    [KeyboardButton(text=f'{param2[13]} Улучшить {param2[3]}'), KeyboardButton(text=f'{param2[13]} Имя {param2[1]}')],
+    [KeyboardButton(text=f'{param2[14]} Коллекционный {param2[0]}'), KeyboardButton(text='👤 Профиль')],
+    [KeyboardButton(text='📋 Список команд'), KeyboardButton(text='⚙️ Часовой пояс')]
+], resize_keyboard=True)
+
+# main_keyboard.keyboard[0][0].text
+time_keyboard = ReplyKeyboardMarkup(keyboard=[
+    [KeyboardButton(text='UTC+2 (МСК-1)'), KeyboardButton(text='UTC+3 (МСК)')],
+    [KeyboardButton(text='UTC+4 (МСК+1)'), KeyboardButton(text='UTC+5 (МСК+2)')],
+    [KeyboardButton(text='UTC+6 (МСК+3)'), KeyboardButton(text='UTC+7 (МСК+4)')],
+    [KeyboardButton(text='UTC+8 (МСК+5)'), KeyboardButton(text='UTC+9 (МСК+6)')],
+    [KeyboardButton(text='UTC+10 (МСК+7)'), KeyboardButton(text='UTC+11 (МСК+8)')]
+], resize_keyboard=True)
 
 
 async def check_min_datetime(date1: str, date2: str) -> str | int:
@@ -185,9 +205,152 @@ async def get_promo(query: str) -> dict | None:
 
 
 """Инициализация бота"""
+storage = MemoryStorage()
 bot = Bot(token=TOKEN)
-dp = Dispatcher()
+dp = Dispatcher(storage=storage)
 logging.basicConfig(level=logging.INFO)
+
+
+class Form1(StatesGroup):
+    value = State()
+
+
+class Form2(StatesGroup):
+    value = State()
+
+
+class Form3(StatesGroup):
+    value = State()
+
+
+class Form4(StatesGroup):
+    value = State()
+
+
+START_TEXT =\
+    'Добро пожаловать в увлекательную игру!\n' + \
+    f'Здесь ты сможешь получать {param1[9]} и обменивать их на легендарные {param2[6]}!\n' + \
+    '📋Список команд:\n' + \
+    f'/get - получить {param1[3]}{param1[13]}\n' + \
+    f'/buy - купить легендарн{add1} {param2[3]} за {price[0]}{param1[13]}\n' + \
+    '/upgrade {1} {2} - прокачать ' + \
+    f'легендарн{add1} {param2[3]} за {price[1]}{param1[13]}\n' + \
+    '/collect {1} - сделать полностью ' + \
+    f'прокачанн{add1} легендарн{add1} {param2[3]} коллекционн{add2} за {price[2]}{param1[13]}\n' + \
+    '/name {1} {3} - задать имя ' + f'коллекционн{add3} {param2[2]}\n' + \
+    '/me - посмотреть профиль\n' + \
+    '/promo {4} - активировать промокод' + \
+    '/time {5} - сменить разницу времени с МСК\n' + \
+    '\nПараметры (указываются без фигурных скобок)\n' + \
+    '{1} - номер ' + f'{param2[1]}, с которым совершается действие\n' + \
+    '{2} - номер характеристики (1, 2 или 3)\n' + \
+    '{3} - имя ' + f'{param2[1]}\n' + \
+    '{4} - промокод\n' + \
+    '{5} - разница во времени от -15 до +11\n'
+
+
+"""Отдельная обработка кнопок, которые имеют параметры"""
+@dp.message(F.text == main_keyboard.keyboard[3][0].text)
+async def start_button(message: Message):
+    await message.reply(START_TEXT[START_TEXT.index('📋'):],
+                        reply_markup=main_keyboard)
+
+
+@dp.message(F.text == main_keyboard.keyboard[1][0].text)
+async def upgrade_button(message: Message, state: FSMContext):
+    num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
+    if num is None:
+        num = 0
+    await message.reply(f"Введите номер {param2[1]} и номер характеристики через пробел. Всего у вас: {num}{param2[13]}",
+                        reply_markup=ReplyKeyboardRemove())
+    await state.set_state(Form1.value)
+
+
+@dp.message(Form1.value)
+async def process_upgrade_button(message: Message, state: FSMContext):
+    form = await state.update_data(value=message.text)
+    max_num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
+    if max_num is None:
+        max_num = 0
+    num: str = form['value']
+    if len(num.split()) >= 2:
+        p1 = num.split()[0]
+        p2 = num.split()[1]
+        await upgrade(message, p1, p2)
+    else:
+        await message.reply("Недостаточно значений❌",
+                            reply_markup=main_keyboard)
+    await state.clear()
+
+
+@dp.message(F.text == main_keyboard.keyboard[1][1].text)
+async def name_button(message: Message, state: FSMContext):
+    max_num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
+    if max_num is None:
+        max_num = 0
+    await message.reply(f"Введите номер {param2[1]} и имя через пробел. Всего у вас: {max_num}{param2[13]}",
+                        reply_markup=ReplyKeyboardRemove())
+    await state.set_state(Form2.value)
+
+
+@dp.message(Form2.value)
+async def process_name_button(message: Message, state: FSMContext):
+    form = await state.update_data(value=message.text)
+    max_num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
+    if max_num is None:
+        max_num = 0
+    num: str = form['value']
+    if len(num.split()) >= 2:
+        id_ = num.split()[0]
+        name_ = num.split()[1]
+        await naming(message, id_, name_)
+    else:
+        await message.reply("Недостаточно значений❌",
+                            reply_markup=main_keyboard)
+    await state.clear()
+
+
+@dp.message(F.text == main_keyboard.keyboard[2][0].text)
+async def collect_button(message: Message, state: FSMContext):
+    max_num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
+    if max_num is None:
+        max_num = 0
+    await message.reply(f"Введите номер {param2[1]}. Всего у вас: {max_num}{param2[13]}",
+                        reply_markup=ReplyKeyboardRemove())
+    await state.set_state(Form3.value)
+
+
+@dp.message(Form3.value)
+async def process_collect_button(message: Message, state: FSMContext):
+    form = await state.update_data(value=message.text)
+    max_num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
+    if max_num is None:
+        max_num = 0
+    num: str = form['value']
+    id_ = num.split()[0]
+    await collect(message, id_)
+    await state.clear()
+
+
+@dp.message(F.text == main_keyboard.keyboard[3][1].text)
+async def time_button(message: Message, state: FSMContext):
+    await message.reply("Выберите свой часовой пояс из списка",
+                        reply_markup=time_keyboard)
+    await state.set_state(Form4.value)
+
+
+@dp.message(Form4.value)
+async def process_time_button(message: Message, state: FSMContext):
+    form = await state.update_data(value=message.text)
+    num: str = form['value']
+    zones = [y[0].text for y in (x for x in time_keyboard.keyboard)] + [y[1].text for y in (x for x in time_keyboard.keyboard)]
+    if num in zones:
+        num = str(int(num.split()[0][3:]) - 3)
+        await timezone(message, num)
+    else:
+        await message.reply("Неверное значение",
+                            reply_markup=main_keyboard)
+    await state.clear()
 
 
 """Стартовое сообщение с списком команд"""
@@ -199,29 +362,7 @@ async def start(message: Message, command: CommandObject) -> None:
         await insert_into_db(
             f"INSERT INTO stat(user_id, kol, koff, gets_kol, time) VALUES ({message.from_user.id}, 0, 0, 0, 0)")
 
-    await message.reply(
-        'Добро пожаловать в увлекательную игру!\n'
-        f'Здесь ты сможешь получать {param1[9]} и обменивать их на легендарные!\n'
-        '📋Список команд:\n'
-
-        f'/get - получить {param1[3]}{param1[13]}\n'
-        f'/buy - купить легендарн{add1} {param2[3]} за {price[0]}{param1[13]}\n'
-        '/upgrade {1} {2} - прокачать ' +
-        f'легендарн{add1} {param2[3]} за {price[1]}{param1[13]}\n'
-        '/collect {1} - сделать полностью ' +
-        f'прокачанн{add1} легендарн{add1} {param2[3]} коллекционн{add2} за {price[2]}{param1[13]}\n'
-        '/name {1} {3} - задать имя ' + f'коллекционн{add3} {param2[2]}\n'
-        '/me - посмотреть профиль\n'
-        '/promo {4} - активировать промокод'
-        '/time {5} - сменить разницу времени с МСК\n'
-
-        '\nПараметры (указываются без фигурных скобок)\n'
-        '{1} - номер ' + f'{param2[1]}, с которым совершается действие\n'
-        '{2} - номер характеристики (1, 2 или 3)\n'
-        '{3} - имя ' + f'{param2[1]}\n'
-        '{4} - промокод\n'
-        '{5} - разница во времени от -15 до +11\n'
-)
+    await message.reply(START_TEXT, reply_markup=main_keyboard)
 
     """Проверка на наличие промокода"""
     if command.args:
@@ -230,6 +371,7 @@ async def start(message: Message, command: CommandObject) -> None:
 
 
 """Получение валюты"""
+@dp.message(F.text == main_keyboard.keyboard[0][0].text)
 @dp.message(Command(commands=['get']))
 async def get(message: Message) -> None:
     lvl_up = False
@@ -248,7 +390,7 @@ async def get(message: Message) -> None:
     koff_index: int = user[3]
     timezona: int = user[4]
     bonus_date: str | None = user[5]
-    promo: str = user[6]
+    promo: str | None = user[6]
 
     """Преобразование текущего времени к часовому поясу пользователя"""
     dtime = await change_timedelta(datetime.datetime.now().strftime("%d.%m.%Y %X"), timezona)
@@ -348,11 +490,13 @@ async def get(message: Message) -> None:
         delta = h2 - dtime
         HH = delta.days * 24 + delta.seconds // 3600
         MM = delta.seconds // 60 - delta.seconds // 3600 * 60
+        SS = delta.seconds - delta.seconds // 60 * 60
         await message.reply(f'Рано получать {param1[9]}!\n'
-                            f'Возвращайтесь через {HH}ч {MM}мин')
+                            f'Возвращайтесь через {HH if HH else ""}{"ч" if HH else ""} {MM}мин {SS if not HH else ""}{"с" if not HH else ""}')
 
 
 """Покупка легендарного персонажа"""
+@dp.message(F.text == main_keyboard.keyboard[0][1].text)
 @dp.message(Command(commands=['buy']))
 async def buy(message: Message, promo=0) -> None:
     koff = 1
@@ -437,23 +581,29 @@ async def buy(message: Message, promo=0) -> None:
 
 
 """Профиль"""
+@dp.message(F.text == main_keyboard.keyboard[2][1].text)
 @dp.message(Command(commands=['me']))
 async def me(message: Message) -> None:
     text = ''
     count = 0
+    h2 = ""
 
     """Получение профиля пользователя"""
     prof = await select_from_db(f'SELECT * FROM stat WHERE user_id={message.from_user.id}')
-    h2 = await change_timedelta(prof[2], 2)
+    if not (prof[2] is None):
+        h2 = await change_timedelta(prof[2], 2)
+        """Преобразование текущего времени к часовому поясу пользователя"""
+        dtime = await change_timedelta(datetime.datetime.now().strftime("%d.%m.%Y %X"), prof[5])
 
-    """Преобразование текущего времени к часовому поясу пользователя"""
-    dtime = await change_timedelta(datetime.datetime.now().strftime("%d.%m.%Y %X"), prof[5])
-
-    BOOL = (await check_min_datetime(h2, dtime)) != h2
+        BOOL = (await check_min_datetime(h2, dtime)) != h2
+    else:
+        BOOL = False
 
     """Получение информации о легендарных персонажах"""
     cursor = await select_from_db(f'SELECT * FROM legendary WHERE user_id={message.from_user.id}')
-    if type(cursor[0]) is type([]):
+    if len(cursor) == 0:
+        count = 0
+    elif type(cursor[0]) is type([]):
         for row in cursor:
             count += 1
             text += (f'№{row[0]}, {row[2]}{" " + row[3] if row[3] else ""}, '
@@ -462,17 +612,17 @@ async def me(message: Message) -> None:
                      f'{param3[2]}: {row[8] if row[8] else row[9]}\n')
     else:
         count = 1
-        text += (f'№{cursor[0]}, {cursor[2]}{" " + cursor[3] if cursor[3] else ""}, '
+        text = (f'№{cursor[0]}, {cursor[2]}{" " + cursor[3] if cursor[3] else ""}, '
                  f'{param3[0]}: {cursor[4] if cursor[4] else cursor[5]}, '
                  f'{param3[1]}: {cursor[6] if cursor[6] else cursor[7]}, '
                  f'{param3[2]}: {cursor[8] if cursor[8] else cursor[9]}\n')
 
-    dtime = await str_to_datetime(dtime)
-    h2 = await str_to_datetime(h2)
-    delta = h2 - dtime
-    HH = delta.days * 24 + delta.seconds // 3600
-    MM = delta.seconds // 60 - delta.seconds // 3600 * 60
-    HHMM = 'через ' + str(HH) + 'ч ' + str(MM) + 'мин'
+    # dtime = await str_to_datetime(dtime)
+    # h2 = await str_to_datetime(h2)
+    # delta = h2 - dtime
+    # HH = delta.days * 24 + delta.seconds // 3600
+    # MM = delta.seconds // 60 - delta.seconds // 3600 * 60
+    # HHMM = 'через ' + str(HH) + 'ч ' + str(MM) + 'мин'
     """Ответ пользователю"""
     await message.reply(f'🆔ID: {prof[0]}\n'
                         f'{param1[13]}{param1[7].capitalize()}: {prof[1]}\n'
@@ -480,7 +630,7 @@ async def me(message: Message) -> None:
                         f'↗️Ваш уровень: {prof[4] + 1} (x{koffs[prof[4]]})\n'
                         f'{"🆙До следующего уровня: " +
                            str(koffs_kol[prof[4] + 1] - prof[3]) if prof[4] + 1 != len(koffs_kol) else ""}\n'
-                        f'⏰Следующее получение: {HHMM if BOOL else 'уже доступно! /get'}\n'
+                        f'⏰Следующее получение: {h2 if BOOL else 'уже доступно! /get'}\n'
                         # f'\n⚙️Часовой пояс: МСК{"+" if prof[5] >= 0 else ""}{prof[5]}'
                         )
     if count > 0:
@@ -489,15 +639,12 @@ async def me(message: Message) -> None:
 
 """Прокачка легендарного персонажа"""
 @dp.message(Command(commands=['upgrade']))
-async def upgrade(message: Message) -> None:
+async def upgrade(message: Message, p1="", p2="") -> None:
     status = "OK"
     num = 0
     text = message.text.split()
     add = ''
-    p1 = "0"
-    p2 = "1"
     value = 0.0
-
     koff = 1
     cursor = await select_from_db(f'SELECT kol, time, promo FROM stat WHERE user_id={message.from_user.id}')
     kol, timezona, PROMO = cursor[0], cursor[1], cursor[2]
@@ -527,11 +674,13 @@ async def upgrade(message: Message) -> None:
                 if (await check_min_datetime(dtime, end + " 23:59:59")) == dtime:
                     koff = param[0]
 
-    if len(text) >= 3:
-        p1 = text[1]
-        p2 = text[2]
-    else:
-        status = "Недостаточно значений❌"
+    if not (p1 and p2):
+        if len(text) >= 3:
+            p1 = text[1]
+            p2 = text[2]
+        else:
+            status = ("Недостаточно значений❌\n"
+                      "Пример команды: /upgrade 1 1")
 
     """Проверка количества легендарных персонажей"""
     cursor = await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}')
@@ -548,7 +697,8 @@ async def upgrade(message: Message) -> None:
         if value > 0.9:
             status = "Достигнут максимальный уровень❌"
     else:
-        status = "Неверные значения❌"
+        status = ("Неверные значения❌\n"
+                  "Пример команды: /upgrade 1 1")
 
     """Получение баланса"""
     if kol < int(price[1] * koff):
@@ -563,14 +713,14 @@ async def upgrade(message: Message) -> None:
             f'UPDATE legendary SET value{p2} = {round(value + 0.1, 1)} WHERE user_id={message.from_user.id} AND id={text[1]}')
 
         await message.reply(f'Вы прокачали {add} до {round(value + 0.1, 1)}!\n'
-                            f'Ваш баланс: {kol - int(price[1] * koff)}{param1[13]}\n')
+                            f'Ваш баланс: {kol - int(price[1] * koff)}{param1[13]}\n', reply_markup=main_keyboard)
     else:
-        await message.reply(status)
+        await message.reply(status, reply_markup=main_keyboard)
 
 
 """Сделать персонажа коллекционным"""
 @dp.message(Command(commands=['collect', 'collectible', 'collected']))
-async def collect(message: Message) -> None:
+async def collect(message: Message, num_="") -> None:
     status = "OK"
     koff = 1
 
@@ -603,14 +753,21 @@ async def collect(message: Message) -> None:
                     koff = param[0]
 
     text = message.text.split()
-    if len(text) >= 2:
+    if not num_:
+        if len(text) >= 2:
+            try:
+                num = int(text[1])
+            except ValueError:
+                num = 0
+        else:
+            num = 0
+            status = ("Недостаточно значений❌\n"
+                      "Пример команды: /collect 1")
+    else:
         try:
-            num = int(text[1])
+            num = int(num_)
         except ValueError:
             num = 0
-    else:
-        num = 0
-        status = "Недостаточно значений❌"
 
     """Проверка на свободные записи в БД"""
     cursor = (await select_from_db('SELECT COUNT(*) FROM legendary'))[0]
@@ -627,13 +784,15 @@ async def collect(message: Message) -> None:
         cursor = await select_from_db(
             f'SELECT value1, value2, value3 FROM legendary WHERE user_id={message.from_user.id} AND id={int(num)}')
         if len(cursor) == 0:
-            status = "Неверные значения❌"
+            status = ("Неверные значения❌\n"
+                      "Пример команды: /collect 1")
         else:
             check_values = sum(cursor)
             if check_values < 3:
                 status = f"{param2[0].capitalize()} недостаточно прокачан❌"
     else:
-        status = "Неверные значения❌"
+        status = ("Неверные значения❌\n"
+                  "Пример команды: /collect 1")
 
     """Получение баланса"""
     balance = (await select_from_db(f'SELECT kol FROM stat WHERE user_id={message.from_user.id}'))[0]
@@ -666,9 +825,10 @@ async def collect(message: Message) -> None:
                             f'{param3[0]}: {value1}\n'
                             f'{param3[1]}: {value2}\n'
                             f'{param3[2]}: {value3}\n'
-                            f'Ваш баланс: {balance - int(price[2] * koff)}{param1[13]}')
+                            f'Ваш баланс: {balance - int(price[2] * koff)}{param1[13]}',
+                            reply_markup=main_keyboard)
     else:
-        await message.reply(status)
+        await message.reply(status, reply_markup=main_keyboard)
 
 
 @dp.message(Command(commands=['new_admin', 'add_admin']))
@@ -682,7 +842,7 @@ async def new_admin(message: Message) -> None:
         check = True
 
     try:
-        if check:
+        if check and cursor[3]:
             await insert_into_db(f'INSERT INTO admins(id) VALUES({int(id_)})')
             await message.reply('Админ добавлен!')
         else:
@@ -692,12 +852,45 @@ async def new_admin(message: Message) -> None:
         await message.reply('Неверный ID❌')
 
 
+@dp.message(Command(commands=['execute', 'script', 'insert']))
+async def execute(message: Message) -> None:
+    cmd = ""
+    if len(message.text.split()) >= 2:
+        cmd = ' '.join(message.text.split()[1:])
+        cursor = await select_from_db(f'SELECT * FROM admins WHERE id={message.from_user.id}')
+        if len(cursor) > 0:
+            if cursor[4]:
+                await insert_into_db(cmd)
+                await message.reply('Выполнено!')
+            else:
+                await message.reply('Недостаточно прав❌')
+        else:
+            await message.reply('Недостаточно прав❌')
+
+
+@dp.message(Command(commands=['select']))
+async def select(message: Message) -> None:
+    cmd = ""
+    if len(message.text.split()) >= 2:
+        cmd = ' '.join(message.text.split()[1:])
+        cursor = await select_from_db(f'SELECT * FROM admins WHERE id={message.from_user.id}')
+        if len(cursor) > 0:
+            if cursor[5]:
+                ans = await select_from_db(cmd)
+                await message.reply(f'{ans}')
+            else:
+                await message.reply('Недостаточно прав❌')
+        else:
+            await message.reply('Недостаточно прав❌')
+
+
 """Присвоение имени легендарному персонажу"""
 @dp.message(Command(commands=['name']))
-async def naming(message: Message) -> None:
-    if len(message.text.split()) >= 3:
-        id_ = message.text.split()[1]
-        name_ = ' '.join(message.text.split()[2:])
+async def naming(message: Message, id_="", name_="") -> None:
+    if len(message.text.split()) >= 3 or name_:
+        if not name_:
+            id_ = message.text.split()[1]
+            name_ = ' '.join(message.text.split()[2:])
 
         count = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
         if count is None:
@@ -708,40 +901,49 @@ async def naming(message: Message) -> None:
                 if 1 <= int(id_) <= count:
                     """Проверка на возможную SQL-инъекцию"""
                     BOOL = '"' in name_ or "'" in name_ or ')' in name_ or \
-                            ']' in name_ or '}' in name_ or '--' in name_ or \
-                            '=' in name_ or 'union' in name_.lower() or \
-                            'concat' in name_.lower() or '*' in name_ or \
-                            ';' in name_ or '@' in name_ or '|' in name_ or \
-                            (r'\ '[0]) in name_ or '%' in name_ or \
-                            '#' in name_ or '&' in name_ or '$' in name_ or \
-                            'select' in name_.lower() or 'where' in name_.lower() or \
-                            '/' in name_ or 'delete' in name_.lower()
+                           ']' in name_ or '}' in name_ or '--' in name_ or \
+                           '=' in name_ or 'union' in name_.lower() or \
+                           'concat' in name_.lower() or '*' in name_ or \
+                           ';' in name_ or '@' in name_ or '|' in name_ or \
+                           (r'\ '[0]) in name_ or '%' in name_ or \
+                           '#' in name_ or '&' in name_ or '$' in name_ or \
+                           'select' in name_.lower() or 'where' in name_.lower() or \
+                           '/' in name_ or 'delete' in name_.lower()
                     if not BOOL:
                         """Запись в БД, ответ пользователю"""
                         await insert_into_db(
                                 f'UPDATE legendary SET name="{name_}" WHERE user_id={message.from_user.id} AND id={id_}')
-                        await message.reply('Имя изменено!')
+                        await message.reply('Имя изменено!',
+                                            reply_markup=main_keyboard)
                     else:
-                        await message.reply('Недопустимые символы❌')
+                        await message.reply('Недопустимые символы❌',
+                                            reply_markup=main_keyboard)
                         cursor = await select_from_db(f'SELECT * FROM admins')
                         for ADMIN in cursor:
-                            await bot.send_message(ADMIN[0],
-                                                   f'Попытка SQL-инъекции\nID: {message.from_user.id}\nТекст: {name_}')
+                            if ADMIN[2]:
+                                await bot.send_message(ADMIN[0],
+                                                       f'Попытка SQL-инъекции\nID: {message.from_user.id}\nТекст: {name_}')
                 else:
-                    await message.reply('Неверный ID❌')
+                    await message.reply('Неверный ID❌',
+                                        reply_markup=main_keyboard)
             else:
-                await message.reply(f'Нет легендарных {param2[7]}❌')
+                await message.reply(f'Нет легендарных {param2[7]}❌',
+                                    reply_markup=main_keyboard)
         except ValueError:
-            await message.reply('Неверный ID❌')
+            await message.reply('Неверный ID❌',
+                                reply_markup=main_keyboard)
     else:
-        await message.reply('Недостаточно значений❌')
+        await message.reply('Недостаточно значений❌\n'
+                            'Пример команды: /name 1 Имя',
+                            reply_markup=main_keyboard)
 
 
 """Смена часового пояса"""
 @dp.message(Command(commands=['time', 'timezone', 'set_time']))
-async def timezone(message: Message) -> None:
-    if len(message.text.split()) >= 2:
-        timer = message.text.split()[1]
+async def timezone(message: Message, timer="") -> None:
+    if len(message.text.split()) >= 2 or timer:
+        if not timer:
+            timer = message.text.split()[1]
 
         try:
             if -15 <= int(timer) <= 11:
@@ -751,23 +953,30 @@ async def timezone(message: Message) -> None:
                     f'SELECT last, time FROM stat WHERE user_id={message.from_user.id}')
                 last = cursor[0]
                 old_time = cursor[1]
+                await insert_into_db(
+                    f'UPDATE stat SET time={timer} WHERE user_id={message.from_user.id}')
 
                 """Смена часового пояса в записи в БД"""
                 if not (last is None):
                     new_last = await change_timedelta(last, timer - old_time)
-
                     """Запись в БД, ответ пользователю"""
                     await insert_into_db(
-                        f'UPDATE stat SET last="{new_last}", time={timer} WHERE user_id={message.from_user.id}')
+                        f'UPDATE stat SET last="{new_last}" WHERE user_id={message.from_user.id}')
 
-                    await message.reply(f'Время изменено на МСК{"+" if timer >= 0 else ""}{timer}')
-                else:
-                    await message.reply('Неверное значение❌')
-
+                await message.reply(f'Время изменено на МСК{"+" if timer >= 0 else ""}{timer}',
+                                    reply_markup=main_keyboard)
+            else:
+                await message.reply('Неверное значение❌\n'
+                                    'Пример команды: /time +1',
+                                    reply_markup=main_keyboard)
         except ValueError:
-            await message.reply('Неверное значение❌')
+            await message.reply('Неверное значение❌\n'
+                                'Пример команды: /time +1',
+                                reply_markup=main_keyboard)
     else:
-        await message.reply('Недостаточно значений❌')
+        await message.reply('Недостаточно значений❌\n'
+                            'Пример команды: /time +1',
+                            reply_markup=main_keyboard)
 
 
 @dp.message(Command(commands=['promo', 'promocode', 'activate']))
@@ -819,7 +1028,8 @@ async def on_startup():
     async with aiosqlite.connect(DB_NAME) as db:
         async with db.execute(f'SELECT * FROM admins') as cursor:
             async for ADMIN in cursor:
-                await bot.send_message(ADMIN[0], f'Бот @{bot_info.username} включён')
+                if ADMIN[1]:
+                    await bot.send_message(ADMIN[0], f'Бот @{bot_info.username} включён')
 
 
 async def on_shutdown():
@@ -827,7 +1037,8 @@ async def on_shutdown():
     async with aiosqlite.connect(DB_NAME) as db:
         async with db.execute(f'SELECT * FROM admins') as cursor:
             async for ADMIN in cursor:
-                await bot.send_message(ADMIN[0], f'Бот @{bot_info.username} выключен')
+                if ADMIN[1]:
+                    await bot.send_message(ADMIN[0], f'Бот @{bot_info.username} выключен')
 
 
 async def main():
