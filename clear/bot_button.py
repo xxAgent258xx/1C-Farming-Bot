@@ -55,7 +55,7 @@ async def process_name_button(message: Message, state: FSMContext):
     num: str = form['value']
     if len(num.split()) >= 2:
         id_ = num.split()[0]
-        name_ = num.split()[1]
+        name_ = num.split()[1:]
         await naming(message, id_, name_)
     else:
         await message.reply("Недостаточно значений❌",
@@ -116,4 +116,5 @@ async def start(message: Message, command: CommandObject = CommandObject()) -> N
     """Проверка на наличие промокода"""
     if command.args:
         if not ((await get_promo(command.args)) is None):
+
             await activate(message, promo=command.args)
