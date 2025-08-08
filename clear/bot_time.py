@@ -14,17 +14,23 @@ async def timezone(message: Message, timer="") -> None:
                 """Получение значений"""
                 cursor = await select_from_db(
                     f'SELECT last, time FROM stat WHERE user_id={message.from_user.id}')
-                last = cursor[0]
-                old_time = cursor[1]
-                await insert_into_db(
-                    f'UPDATE stat SET time={timer} WHERE user_id={message.from_user.id}')
 
-                """Смена часового пояса в записи в БД"""
-                if not (last is None):
-                    new_last = await change_timedelta(last, timer - old_time)
-                    """Запись в БД, ответ пользователю"""
+                try:
+                    last = cursor[0]
+                    old_time = cursor[1]
                     await insert_into_db(
-                        f'UPDATE stat SET last="{new_last}" WHERE user_id={message.from_user.id}')
+                        f'UPDATE stat SET time={timer} WHERE user_id={message.from_user.id}')
+
+                    """Смена часового пояса в записи в БД"""
+                    if not (last is None):
+                        new_last = await change_timedelta(last, timer - old_time)
+                        """Запись в БД, ответ пользователю"""
+                        await insert_into_db(
+                            f'UPDATE stat SET last="{new_last}" WHERE user_id={message.from_user.id}')
+
+                except IndexError:
+                    await insert_into_db(
+                        f"INSERT INTO stat(user_id, kol, koff, gets_kol, time, streak, activity) VALUES ({message.from_user.id}, 0, 0, 0, {timer}, 1, 0)")
 
                 await message.reply(f'Время изменено на МСК{"+" if timer >= 0 else ""}{timer}',
                                     reply_markup=main_keyboard)

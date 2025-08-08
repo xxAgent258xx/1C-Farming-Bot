@@ -13,7 +13,10 @@ async def collect(message: Message, num_="") -> None:
     koff = 1
 
     cursor = await select_from_db(f'SELECT kol, time, promo FROM stat WHERE user_id={message.from_user.id}')
-    balance, timezona, PROMO = cursor[0], cursor[1], cursor[2]
+    try:
+        balance, timezona, PROMO = cursor[0], cursor[1], cursor[2]
+    except IndexError:
+        balance, timezona, PROMO = 0, 0, None
 
     """Проверка на наличие промокода"""
     if not (PROMO is None):

@@ -10,7 +10,12 @@ from bot_const import (select_from_db, change_timedelta, check_min_datetime,
 async def buy(message: Message, promo=0) -> None:
     koff = 1
     cursor = await select_from_db(f'SELECT kol, time, promo FROM stat WHERE user_id={message.from_user.id}')
-    balance, timezona, PROMO = cursor[0], cursor[1], cursor[2]
+    try:
+        balance, timezona, PROMO = cursor[0], cursor[1], cursor[2]
+    except IndexError:
+        balance, timezona, PROMO = 0, 0, None
+        await insert_into_db(
+            f"INSERT INTO stat(user_id, kol, koff, gets_kol, time, streak, activity) VALUES ({message.from_user.id}, 0, 0, 0, 0, 1, 0)")
 
     """Проверка на наличие промокода"""
     if not (PROMO is None):
@@ -53,8 +58,8 @@ async def buy(message: Message, promo=0) -> None:
         value3 = random.choice(chance)
 
         """Запись в БД, ответ пользователю"""
-        await insert_into_db(f'INSERT INTO legendary(id, user_id, animal, value1, value2, value3) VALUES({
-        num}, {message.from_user.id}, "{name_}", {value1}, {value2}, {value3})')
+        await insert_into_db(f'INSERT INTO legendary(id, user_id, animal, value1, value2, value3, sell) VALUES({
+        num}, {message.from_user.id}, "{name_}", {value1}, {value2}, {value3}, 0)')
 
         await message.reply(f'Вам выдан легендарн{add5} {param2[0]}!{param2[14]}\n'
                             f'№: {num}\n'
@@ -75,8 +80,8 @@ async def buy(message: Message, promo=0) -> None:
 
         """Запись в БД, ответ пользователю"""
         await insert_into_db(f'UPDATE stat SET kol={balance - int(price[0] * koff)} WHERE user_id={message.from_user.id}')
-        await insert_into_db(f'INSERT INTO legendary(id, user_id, animal, value1, value2, value3) VALUES({
-        num}, {message.from_user.id}, "{name_}", {value1}, {value2}, {value3})')
+        await insert_into_db(f'INSERT INTO legendary(id, user_id, animal, value1, value2, value3, sell) VALUES({
+        num}, {message.from_user.id}, "{name_}", {value1}, {value2}, {value3}, 0)')
 
         await message.reply(f'Поздравляю с покупкой легендарн{add4} {param2[1]}!{param2[14]}\n'
                             f'№: {num}\n'

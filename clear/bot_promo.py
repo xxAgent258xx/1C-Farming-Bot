@@ -8,9 +8,12 @@ from bot_const import (select_from_db, change_timedelta, get_promo, insert_into_
 
 async def activate(message: Message, promo="") -> None:
     bonus = False
-
+    PROMO = await select_from_db(f"SELECT promo FROM stat WHERE user_id={message.from_user.id}")
+    if len(PROMO) == 0:
+        await insert_into_db(
+            f"INSERT INTO stat(user_id, kol, koff, gets_kol, time, streak, activity) VALUES ({message.from_user.id}, 0, 0, 0, 0, 1, 0)")
     """Проверка, отсутствует ли активированный промокод"""
-    if (await select_from_db(f"SELECT promo FROM stat WHERE user_id={message.from_user.id}"))[0] is None:
+    if PROMO[0] is None:
         """Проверка, был ли передан промокод"""
         if promo == "":
             text = message.text.split()

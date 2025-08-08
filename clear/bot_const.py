@@ -48,6 +48,8 @@ time_keyboard = ReplyKeyboardMarkup(keyboard=[
     [KeyboardButton(text='UTC+10 (МСК+7)'), KeyboardButton(text='UTC+11 (МСК+8)')]
 ], resize_keyboard=True)
 
+cancel_keyboard = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text='◀️ Отмена')]], resize_keyboard=True)
+
 
 async def check_min_datetime(date1: str, date2: str) -> str | int:
     if int(date1[6:11]) > int(date2[6:11]):
@@ -194,7 +196,7 @@ CMD_TEXT =\
     f'легендарн{add1} {param2[3]} коллекционн{add2} за {price[2]} {param1[7]}{param1[13]}\n' + \
     '/name {1} {3} - задать имя ' + f'коллекционн{add3} {param2[2]}\n' + \
     '/me - посмотреть профиль\n' + \
-    '/promo {4} - активировать промокод' + \
+    '/promo {4} - активировать промокод\n' + \
     '/time {5} - сменить разницу времени с МСК\n' + \
     '\nПараметры (указываются без фигурных скобок)\n' + \
     '{1} - номер ' + f'{param2[1]}, с которым совершается действие\n' + \

@@ -20,6 +20,12 @@ async def get(message: Message) -> None:
     """Получение значений из БД"""
     user = await select_from_db(
         f"SELECT kol, last, gets_kol, koff, time, bonus_date, promo FROM stat WHERE user_id={message.from_user.id}")
+    if len(user) == 0:
+        await insert_into_db(
+            f"INSERT INTO stat(user_id, kol, koff, gets_kol, time, streak, activity) VALUES ({message.from_user.id}, 0, 0, 0, 0, 1, 0)")
+        user = await select_from_db(
+            f"SELECT kol, last, gets_kol, koff, time, bonus_date, promo FROM stat WHERE user_id={message.from_user.id}")
+
     kol: int = user[0]
     last: str | None = user[1]
     gets_kol: int = user[2] + 1
@@ -79,20 +85,19 @@ async def get(message: Message) -> None:
             if (await check_min_datetime(user_date, bonus_date + " 00:00:00")) == bonus_date + " 00:00:00":
                 have_bonus = True
 
-        if have_bonus:
-            get_kol += bonus
-            await insert_into_db(f'UPDATE stat SET bonus_date="{
-            user_date.split()[0]}" WHERE user_id={message.from_user.id}')
-
             """Проверка на серию входов"""
             tomorrow = await change_timedelta(bonus_date + " 00:00:00", 24)
             if (await check_min_datetime(user_date, tomorrow)) == 0:
                 streak = (await select_from_db(f"SELECT streak FROM stat WHERE user_id={message.from_user.id}"))[0] + 1
                 await insert_into_db(f'UPDATE stat SET streak={streak} WHERE user_id={message.from_user.id}')
-
             else:
                 streak = 0
                 await insert_into_db(f'UPDATE stat SET streak=1 WHERE user_id={message.from_user.id}')
+
+        if have_bonus:
+            get_kol += bonus
+            await insert_into_db(f'UPDATE stat SET bonus_date="{
+            user_date.split()[0]}" WHERE user_id={message.from_user.id}')
 
         """Время следующего возможного получения валюты после времени из БД"""
         h2 = await change_timedelta(last, DELTA)

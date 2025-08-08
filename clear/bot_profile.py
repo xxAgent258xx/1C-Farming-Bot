@@ -3,7 +3,7 @@ from aiogram.types import Message
 
 from bot_param import param1, param2, param3
 from bot_const import (select_from_db, change_timedelta, check_min_datetime,
-                       koffs, koffs_kol)
+                       koffs, koffs_kol, insert_into_db)
 
 
 async def me(message: Message) -> None:
@@ -15,6 +15,9 @@ async def me(message: Message) -> None:
 
     """Получение профиля пользователя"""
     prof = await select_from_db(f'SELECT * FROM stat WHERE user_id={message.from_user.id}')
+    if len(prof) == 0:
+        await insert_into_db(
+            f"INSERT INTO stat(user_id, kol, koff, gets_kol, time, streak, activity) VALUES ({message.from_user.id}, 0, 0, 0, 0, 1, 0)")
     if not (prof[2] is None):
         h2 = await change_timedelta(prof[2], 2)
         """Преобразование текущего времени к часовому поясу пользователя"""

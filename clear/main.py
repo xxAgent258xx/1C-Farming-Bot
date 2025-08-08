@@ -1,16 +1,14 @@
 import asyncio
+import logging
 from aiogram import F
 from aiogram.filters import Command, CommandStart, CommandObject
-from aiogram.types import Message, ReplyKeyboardRemove
+from aiogram.types import Message, ReplyKeyboardRemove, InlineQuery
 from aiogram.fsm.context import FSMContext
 
-from bot_const import (add1, add2, add3, add4, add5, chance, koffs, koffs_kol,
-                       storage, bot, dp, DB_NAME, main_keyboard, time_keyboard,
-                       check_min_datetime, select_from_db, change_timedelta,
-                       str_to_datetime, insert_into_db, get_promo, Form1, Form2,
-                       Form3, Form4, START_TEXT, CMD_TEXT)
+from bot_const import (bot, dp, main_keyboard, select_from_db, Form1, Form2,
+                       Form3, Form4, CMD_TEXT, cancel_keyboard)
 
-from bot_param import param1, param2, param3, names, values1, values2, values3, price
+# from bot_param import param1, param2, param3, names, values1, values2, values3, price
 from bot_get import get
 from bot_buy import buy
 from bot_upgrade import upgrade
@@ -20,12 +18,76 @@ from bot_promo import activate
 from bot_time import timezone
 from bot_profile import me
 from bot_admin import new_admin, select, execute
+from bot_sell import sell, inline, market
 from bot_button import (upgrade_button, process_upgrade_button, name_button,
                         process_name_button, collect_button, time_button,
                         process_collect_button, process_time_button, start)
 
+logging.basicConfig(level=logging.INFO)
 
-"""Обработка кнопок"""
+
+@dp.message(F.text == cancel_keyboard.keyboard[0][0].text)
+async def cancel(message: Message, state: FSMContext):
+    await message.reply("Действие отменено. Список команд: /menu", reply_markup=main_keyboard)
+    await state.clear()
+
+
+"""Прокачка легендарного персонажа"""
+
+
+@dp.message(Command(commands=['upgrade']))
+async def upgrade_main(message: Message, p1="", p2="") -> None:
+    await upgrade(message, p1, p2)
+
+
+"""Сделать персонажа коллекционным"""
+
+
+@dp.message(Command(commands=['collect', 'collectible', 'collected']))
+async def collect_main(message: Message, num_="") -> None:
+    await collect(message, num_)
+
+
+"""Присвоение имени легендарному персонажу"""
+
+
+@dp.message(Command(commands=['name']))
+async def naming_main(message: Message, id_="", name_="") -> None:
+    await naming(message, id_, name_)
+
+
+"""Смена часового пояса"""
+
+
+@dp.message(Command(commands=['time', 'timezone', 'set_time']))
+async def timezone_main(message: Message, timer="") -> None:
+    await timezone(message, timer)
+
+
+"""Активация промокода"""
+
+
+@dp.message(Command(commands=['promo', 'promocode', 'activate']))
+async def activate_main(message: Message, promo="") -> None:
+    await activate(message, promo)
+
+
+@dp.message(Command(commands=['new_admin', 'add_admin']))
+async def new_admin_main(message: Message) -> None:
+    await new_admin(message)
+
+
+@dp.message(Command(commands=['execute', 'script', 'insert']))
+async def execute_main(message: Message) -> None:
+    await execute(message)
+
+
+@dp.message(Command(commands=['select']))
+async def select_main(message: Message) -> None:
+    await select(message)
+
+
+"""Обработка кнопок (помещена в конец файла т.к. пользователь может передумать и воспользоваться командой)"""
 
 
 @dp.message(Command(commands=['menu']))
@@ -115,57 +177,19 @@ async def me_main(message: Message) -> None:
     await me(message)
 
 
-"""Прокачка легендарного персонажа"""
+@dp.message(Command(commands=['sell']))
+async def sell_main(message: Message) -> None:
+    await sell(message)
 
 
-@dp.message(Command(commands=['upgrade']))
-async def upgrade_main(message: Message, p1="", p2="") -> None:
-    await upgrade(message, p1, p2)
+@dp.message(Command(commands=['market']))
+async def market_main(message: Message) -> None:
+    await market(message)
 
 
-"""Сделать персонажа коллекционным"""
-
-
-@dp.message(Command(commands=['collect', 'collectible', 'collected']))
-async def collect_main(message: Message, num_="") -> None:
-    await collect(message, num_)
-
-
-"""Присвоение имени легендарному персонажу"""
-
-
-@dp.message(Command(commands=['name']))
-async def naming_main(message: Message, id_="", name_="") -> None:
-    await naming(message, id_, name_)
-
-
-"""Смена часового пояса"""
-
-
-@dp.message(Command(commands=['time', 'timezone', 'set_time']))
-async def timezone_main(message: Message, timer="") -> None:
-    await timezone(message, timer)
-
-
-"""Активация промокода"""
-@dp.message(Command(commands=['promo', 'promocode', 'activate']))
-async def activate_main(message: Message, promo="") -> None:
-    await activate(message, promo)
-
-
-@dp.message(Command(commands=['new_admin', 'add_admin']))
-async def new_admin_main(message: Message) -> None:
-    await new_admin(message)
-
-
-@dp.message(Command(commands=['execute', 'script', 'insert']))
-async def execute_main(message: Message) -> None:
-    await execute(message)
-
-
-@dp.message(Command(commands=['select']))
-async def select_main(message: Message) -> None:
-    await select(message)
+@dp.inline_query()
+async def inline_main(inline_query: InlineQuery):
+    await inline(inline_query)
 
 
 async def on_startup():
@@ -192,4 +216,3 @@ async def main():
 
 if __name__ == '__main__':
     asyncio.run(main())
-

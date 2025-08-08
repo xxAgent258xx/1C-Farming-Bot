@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 from bot_param import param2
 from bot_const import (select_from_db, Form1, Form2, Form3, Form4, get_promo,
                        insert_into_db, main_keyboard, time_keyboard, START_TEXT,
-                       CMD_TEXT)
+                       cancel_keyboard)
 from bot_upgrade import upgrade
 from bot_name import naming
 from bot_collect import collect
@@ -18,7 +18,7 @@ async def upgrade_button(message: Message, state: FSMContext):
     if num is None:
         num = 0
     await message.reply(f"Введите номер {param2[1]} и номер характеристики через пробел. Всего у вас: {num}{param2[13]}",
-                        reply_markup=ReplyKeyboardRemove())
+                        reply_markup=cancel_keyboard)
     await state.set_state(Form1.value)
 
 
@@ -43,7 +43,7 @@ async def name_button(message: Message, state: FSMContext):
     if max_num is None:
         max_num = 0
     await message.reply(f"Введите номер {param2[1]} и имя через пробел. Всего у вас: {max_num}{param2[13]}",
-                        reply_markup=ReplyKeyboardRemove())
+                        reply_markup=cancel_keyboard)
     await state.set_state(Form2.value)
 
 
@@ -68,7 +68,7 @@ async def collect_button(message: Message, state: FSMContext):
     if max_num is None:
         max_num = 0
     await message.reply(f"Введите номер {param2[1]}. Всего у вас: {max_num}{param2[13]}",
-                        reply_markup=ReplyKeyboardRemove())
+                        reply_markup=cancel_keyboard)
     await state.set_state(Form3.value)
 
 
@@ -116,5 +116,4 @@ async def start(message: Message, command: CommandObject = CommandObject()) -> N
     """Проверка на наличие промокода"""
     if command.args:
         if not ((await get_promo(command.args)) is None):
-
             await activate(message, promo=command.args)
