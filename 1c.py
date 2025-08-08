@@ -301,17 +301,55 @@ async def activate_main(message: Message, promo="") -> None:
 
 @dp.message(Command(commands=['new_admin', 'add_admin']))
 async def new_admin_main(message: Message) -> None:
-    await new_admin(message)
+    check = False
+    id_ = 0
+    if len(message.text.split()) >= 2:
+        id_ = message.text.split()[1]
+    cursor = await select_from_db(f'SELECT * FROM admins WHERE id={message.from_user.id}')
+    if len(cursor) > 0:
+        check = True
+
+    try:
+        if check and cursor[3]:
+            await insert_into_db(f'INSERT INTO admins(id) VALUES({int(id_)})')
+            await message.reply('Админ добавлен!')
+        else:
+            await message.reply('Недостаточно прав❌')
+
+    except ValueError:
+        await message.reply('Неверный ID❌')
 
 
 @dp.message(Command(commands=['execute', 'script', 'insert']))
-async def execute_main(message: Message) -> None:
-    await execute(message)
+async def execute(message: Message) -> None:
+    cmd = ""
+    if len(message.text.split()) >= 2:
+        cmd = ' '.join(message.text.split()[1:])
+        cursor = await select_from_db(f'SELECT * FROM admins WHERE id={message.from_user.id}')
+        if len(cursor) > 0:
+            if cursor[4]:
+                await insert_into_db(cmd)
+                await message.reply('Выполнено!')
+            else:
+                await message.reply('Недостаточно прав❌')
+        else:
+            await message.reply('Недостаточно прав❌')
 
 
 @dp.message(Command(commands=['select']))
-async def select_main(message: Message) -> None:
-    await select(message)
+async def select(message: Message) -> None:
+    cmd = ""
+    if len(message.text.split()) >= 2:
+        cmd = ' '.join(message.text.split()[1:])
+        cursor = await select_from_db(f'SELECT * FROM admins WHERE id={message.from_user.id}')
+        if len(cursor) > 0:
+            if cursor[5]:
+                ans = await select_from_db(cmd)
+                await message.reply(f'{ans}')
+            else:
+                await message.reply('Недостаточно прав❌')
+        else:
+            await message.reply('Недостаточно прав❌')
 
 
 """Обработка кнопок (помещена в конец файла т.к. пользователь может передумать и воспользоваться командой)"""
@@ -662,6 +700,7 @@ async def main():
 if __name__ == '__main__':
     asyncio.run(main())
   
+
 
 
 
