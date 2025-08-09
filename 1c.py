@@ -367,12 +367,14 @@ async def upgrade_main(message: Message, p1="", p2="") -> None:
     """Получение баланса"""
     if kol // int(price[1] * koff) == 0:
         status = f"Недостаточно {param1[7]}❌"
-
     if status == "OK":
         """Запись в БД, ответ пользователю"""
         add = param3[5 + int(p2)]
-        new_kol = kol - kol // int(price[1] * koff) * int(price[1] * koff)
-        new_value = round(value + 0.1 * kol // int(price[1] * koff), 1)
+
+        lvls = min(kol // int(price[1] * koff), 1 - value)
+        new_kol = kol - lvls * int(price[1] * koff)
+        new_value = round(value + 0.1 * lvls, 1)
+
         await insert_into_db(f'UPDATE stat SET kol={new_kol} WHERE user_id={message.from_user.id}')
         await insert_into_db(
             f'UPDATE legendary SET value{p2} = {new_value} WHERE user_id={message.from_user.id} AND id={p1}')
@@ -1097,6 +1099,7 @@ async def me_main(message: Message) -> None:
     if len(prof) == 0:
         await insert_into_db(
             f"INSERT INTO stat(user_id, kol, koff, gets_kol, time, streak, activity) VALUES ({message.from_user.id}, 0, 0, 0, 0, 1, 0)")
+        prof = await select_from_db(f'SELECT * FROM stat WHERE user_id={message.from_user.id}')
     if not (prof[2] is None):
         h2 = await change_timedelta(prof[2], 2)
         """Преобразование текущего времени к часовому поясу пользователя"""
@@ -1107,7 +1110,7 @@ async def me_main(message: Message) -> None:
         BOOL = False
 
     """Получение информации о легендарных персонажах"""
-    cursor = await select_from_db(f'SELECT * FROM legendary WHERE user_id={message.from_user.id}')
+    cursor = await select_from_db(f'SELECT * FROM legendary WHERE user_id={message.from_user.id} ORDER BY id')
     if len(cursor) == 0:
         pass
     elif type(cursor[0]) is type([]):
