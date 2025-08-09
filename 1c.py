@@ -29,11 +29,39 @@ param2 = ["вуппит", "вуппита", "вуппиту", "вуппита", 
           "М", "🧸", "🎠"]
 
 """Возможные разновидности легендарных персонажей"""
-names = ["Лев", "Тигр", "Мышь", "Лошадь", "Пантера",
-         "Кролик", "Капибара", "Волк", "Лисица", "Хомяк",
+names = ["Лев", "Тигр", "Мышь", "Лошадь", "Цыплёнок",
+         "Кролик", "Единорог", "Волк", "Лисица", "Хомяк",
          "Утка", "Гусь", "Олень", "Бобёр", "Сова",
-         "Медведь", "Панда", "Кенгуру", "Орёл", "Антилопа",
+         "Медведь", "Панда", "Кенгуру", "Орёл", "Лебедь",
          "Енот", "Леопард", "Зебра", "Дракон", "Кошка"]
+
+emoji = {
+    "Лев": "https://emojigraph.org/media/apple/lion_1f981.png",
+    "Тигр": "https://emojigraph.org/media/whatsapp/tiger-face_1f42f.png",
+    "Мышь": "https://emojigraph.org/media/whatsapp/mouse-face_1f42d.png",
+    "Лошадь": "https://emojigraph.org/media/facebook/horse-face_1f434.png",
+    "Цыплёнок": "https://emojigraph.org/media/facebook/hatching-chick_1f423.png",
+    "Кролик": "https://emojigraph.org/media/apple/rabbit-face_1f430.png",
+    "Единорог": "https://emojigraph.org/media/facebook/unicorn_1f984.png",
+    "Волк": "https://emojigraph.org/media/facebook/wolf_1f43a.png",
+    "Лисица": "https://emojigraph.org/media/whatsapp/fox_1f98a.png",
+    "Хомяк": "https://emojigraph.org/media/apple/hamster_1f439.png",
+    "Утка": "https://emojigraph.org/media/whatsapp/duck_1f986.png",
+    "Гусь": "https://emojigraph.org/media/apple/goose_1fabf.png",
+    "Олень": "https://emojigraph.org/media/facebook/deer_1f98c.png",
+    "Бобёр": "https://emojigraph.org/media/apple/beaver_1f9ab.png",
+    "Сова": "https://emojigraph.org/media/apple/owl_1f989.png",
+    "Медведь": "https://emojigraph.org/media/whatsapp/bear_1f43b.png",
+    "Панда": "https://emojigraph.org/media/whatsapp/panda_1f43c.png",
+    "Кенгуру": "https://emojigraph.org/media/facebook/kangaroo_1f998.png",
+    "Орёл": "https://emojigraph.org/media/apple/eagle_1f985.png",
+    "Лебедь": "https://emojigraph.org/media/facebook/swan_1f9a2.png",
+    "Енот": "https://emojigraph.org/media/facebook/raccoon_1f99d.png",
+    "Леопард": "https://emojigraph.org/media/facebook/leopard_1f406.png",
+    "Зебра": "https://emojigraph.org/media/facebook/zebra_1f993.png",
+    "Дракон": "https://emojigraph.org/media/whatsapp/dragon-face_1f432.png",
+    "Кошка": "https://emojigraph.org/media/facebook/cat-face_1f431.png"
+}
 
 """Названия характеристик в И.п., Р.п. и В.п."""
 param3 = ["Шерсть", "Глаза", "Узор",
@@ -75,7 +103,7 @@ koffs_kol = [0, 10, 50, 100, 500, 1000, 2500, 5000, 10000, 25000, 50000]
 storage = MemoryStorage()
 bot = Bot(token=FARMING_BOT_TOKEN)
 dp = Dispatcher(storage=storage)
-DB_NAME = '1c.db'
+DB_NAME = '/data/1c.db'
 
 """Меню бота"""
 main_keyboard = ReplyKeyboardMarkup(keyboard=[
@@ -337,19 +365,20 @@ async def upgrade_main(message: Message, p1="", p2="") -> None:
                   "Пример команды: /upgrade 1 1")
 
     """Получение баланса"""
-    if kol < int(price[1] * koff):
+    if kol // int(price[1] * koff) == 0:
         status = f"Недостаточно {param1[7]}❌"
 
     if status == "OK":
         """Запись в БД, ответ пользователю"""
         add = param3[5 + int(p2)]
-
-        await insert_into_db(f'UPDATE stat SET kol={kol - int(price[1] * koff)} WHERE user_id={message.from_user.id}')
+        new_kol = kol - kol // int(price[1] * koff) * int(price[1] * koff)
+        new_value = round(value + 0.1 * kol // int(price[1] * koff), 1)
+        await insert_into_db(f'UPDATE stat SET kol={new_kol} WHERE user_id={message.from_user.id}')
         await insert_into_db(
-            f'UPDATE legendary SET value{p2} = {round(value + 0.1, 1)} WHERE user_id={message.from_user.id} AND id={p1}')
+            f'UPDATE legendary SET value{p2} = {new_value} WHERE user_id={message.from_user.id} AND id={p1}')
 
-        await message.reply(f'Вы прокачали {add} до {round(value + 0.1, 1)}!\n'
-                            f'Ваш баланс: {kol - int(price[1] * koff)}{param1[13]}\n', reply_markup=main_keyboard)
+        await message.reply(f'Вы прокачали {add} до {new_value}!\n'
+                            f'Ваш баланс: {new_kol}{param1[13]}\n', reply_markup=main_keyboard)
     else:
         await message.reply(status, reply_markup=main_keyboard)
 
@@ -697,7 +726,7 @@ async def upgrade_button_main(message: Message, state: FSMContext):
     num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
     if num is None:
         num = 0
-    await message.reply(f"Введите номер {param2[1]} и номер характеристики через пробел. Всего у вас: {num}{param2[13]}",
+    await message.reply(f"Введите номер {param2[1]} и номер характеристики через пробел. Всего у вас {param2[7]}: {num}",
                         reply_markup=cancel_keyboard)
     await state.set_state(Form1.value)
 
@@ -724,7 +753,7 @@ async def name_button_main(message: Message, state: FSMContext):
     max_num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
     if max_num is None:
         max_num = 0
-    await message.reply(f"Введите номер {param2[1]} и имя через пробел. Всего у вас: {max_num}{param2[13]}",
+    await message.reply(f"Введите номер {param2[1]} и имя через пробел. Всего у вас {param2[7]}: {max_num}",
                         reply_markup=cancel_keyboard)
     await state.set_state(Form2.value)
 
@@ -751,7 +780,7 @@ async def collect_button_main(message: Message, state: FSMContext):
     max_num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
     if max_num is None:
         max_num = 0
-    await message.reply(f"Введите номер {param2[1]}. Всего у вас: {max_num}{param2[13]}",
+    await message.reply(f"Введите номер {param2[1]}. Всего у вас {param2[7]}: {max_num}",
                         reply_markup=cancel_keyboard)
     await state.set_state(Form3.value)
 
@@ -1201,7 +1230,7 @@ async def market_main(message: Message) -> None:
                         else:
                             num += 1
 
-                        await insert_into_db(f'UPDATE legendary SET id={num}, user_id={message.from_user.id} WHERE '
+                        await insert_into_db(f'UPDATE legendary SET id={num}, user_id={message.from_user.id}, sell=0 WHERE '
                                              f'class1="{msg[1]}" AND class2="{msg[2]}" AND class3="{msg[3]}"')
 
                         await message.reply(f'{param2[0].capitalize()} куплен{param2[14]}')
@@ -1219,7 +1248,9 @@ async def market_main(message: Message) -> None:
             else:
                 await message.reply(f"Такой {param2[0]} не продаётся❌")
         else:
-            await message.reply("Неверные значения❌")
+            await message.reply("Неверные значения❌\n"
+                                f"Список продающихся {param2[7]} в Маркете.\n"
+                                "Подробнее /menu")
     else:
         await message.reply("Недостаточно значений❌")
 
@@ -1275,7 +1306,7 @@ async def inline_main(inline_query: InlineQuery):
                 a = InlineQueryResultArticle(id=str(i),
                                              type=InlineQueryResultType.ARTICLE,
                                              title=f'{list_[i][0]} за {list_[i][4]}{param1[13]}',
-                                             thumbnail_url='https://emojigraph.org/media/apple/teddy-bear_1f9f8.png',
+                                             thumbnail_url=emoji[list_[i][0]],
                                              input_message_content=InputTextMessageContent(
                                                  message_text=f'/market {list_[i][1]} {list_[i][2]} {list_[i][3]}'
                                              ),
@@ -1325,7 +1356,10 @@ async def on_shutdown():
 async def main():
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
-    await dp.start_polling(bot)
+    try:
+        await dp.start_polling(bot)
+    finally:
+        await bot.session.close()
 
 
 if __name__ == '__main__':
