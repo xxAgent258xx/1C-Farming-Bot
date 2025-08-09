@@ -4,8 +4,12 @@ import aiosqlite
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher, F
+from aiogram.enums import InlineQueryResultType
 from aiogram.filters import Command, CommandStart, CommandObject
-from aiogram.types import Message, ReplyKeyboardRemove, InlineQuery
+from aiogram.fsm.state import StatesGroup, State
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import Message, ReplyKeyboardRemove, InlineQuery, ReplyKeyboardMarkup, KeyboardButton, \
+    InlineQueryResultArticle, InputTextMessageContent
 from aiogram.fsm.context import FSMContext
 
 from tokens import FARMING_BOT_TOKEN
@@ -67,18 +71,17 @@ koffs = [1, 2, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
 """Количество использований, необходимое для применения коэффициента"""
 koffs_kol = [0, 10, 50, 100, 500, 1000, 2500, 5000, 10000, 25000, 50000]
 
-
 """Инициализация бота"""
 storage = MemoryStorage()
 bot = Bot(token=FARMING_BOT_TOKEN)
 dp = Dispatcher(storage=storage)
 DB_NAME = '1c.db'
 
-
 """Меню бота"""
 main_keyboard = ReplyKeyboardMarkup(keyboard=[
     [KeyboardButton(text='▶️ Старт'), KeyboardButton(text='⬇️ Свернуть меню')],
-    [KeyboardButton(text=f'{param1[13]} Получить {param1[9]}'), KeyboardButton(text=f'{param2[13]} Купить {param2[3]}')],
+    [KeyboardButton(text=f'{param1[13]} Получить {param1[9]}'),
+     KeyboardButton(text=f'{param2[13]} Купить {param2[3]}')],
     [KeyboardButton(text=f'{param2[13]} Улучшить {param2[3]}'), KeyboardButton(text=f'{param2[13]} Имя {param2[1]}')],
     [KeyboardButton(text=f'{param2[14]} Коллекционный {param2[0]}'), KeyboardButton(text='👤 Профиль')],
     [KeyboardButton(text='📋 Список команд'), KeyboardButton(text='⚙️ Часовой пояс')]
@@ -226,9 +229,9 @@ class Form4(StatesGroup):
     value = State()
 
 
-START_TEXT =\
+START_TEXT = \
     'Добро пожаловать в увлекательную игру!\n' + \
-    f'Здесь ты сможешь получать {param1[9]}, покупать легендарные {param2[6]}, прокачивать их и делать коллекционными!\n' +\
+    f'Здесь ты сможешь получать {param1[9]}, покупать легендарные {param2[6]}, прокачивать их и делать коллекционными!\n' + \
     f'Список команд: /menu'
 
 CMD_TEXT =\
@@ -239,6 +242,10 @@ CMD_TEXT =\
     f'легендарн{add1} {param2[3]} за {price[1]} {param1[7]}{param1[13]}\n' + \
     '/collect {1} - сделать ' + \
     f'легендарн{add1} {param2[3]} коллекционн{add2} за {price[2]} {param1[7]}{param1[13]}\n' + \
+    '/sell {1} {6} - выставить на продажу ' + f'коллекционн{add1} {param2[3]}\n' + \
+    f'@wuppit_bot ' + '{7} {7} {7} - найти ' + f'коллекционн{add1} {param2[3]}\n' + \
+    '(для пропуска фильтра любой символ)\n' + \
+    '/market {7} {7} {7} - приобрести ' + f'коллекционн{add1} {param2[3]}\n' + \
     '/name {1} {3} - задать имя ' + f'коллекционн{add3} {param2[2]}\n' + \
     '/me - посмотреть профиль\n' + \
     '/promo {4} - активировать промокод\n' + \
@@ -248,7 +255,9 @@ CMD_TEXT =\
     '{2} - номер характеристики (1, 2 или 3)\n' + \
     '{3} - имя ' + f'{param2[1]}\n' + \
     '{4} - промокод\n' + \
-    '{5} - разница во времени от -15 до +11\n'
+    '{5} - разница во времени от -15 до +11\n' + \
+    '{6} - цена (0 для снятия с продажи)\n' + \
+    '{7} - значение характеристики\n'
 
 logging.basicConfig(level=logging.INFO)
 
@@ -264,7 +273,85 @@ async def cancel(message: Message, state: FSMContext):
 
 @dp.message(Command(commands=['upgrade']))
 async def upgrade_main(message: Message, p1="", p2="") -> None:
-    await upgrade(message, p1, p2)
+    status = "OK"
+    num = 0
+    text = message.text.split()
+    add = ''
+    value = 0.0
+    koff = 1
+    cursor = await select_from_db(f'SELECT kol, time, promo FROM stat WHERE user_id={message.from_user.id}')
+    try:
+        kol, timezona, PROMO = cursor[0], cursor[1], cursor[2]
+    except IndexError:
+        kol, timezona, PROMO = 0, 0, None
+
+    """Проверка на наличие промокода"""
+    if not (PROMO is None):
+        """Разделение на код и дату"""
+        code_ = PROMO.split(';')
+        code_, date = code_[0], code_[1]
+
+        """Поиск кода"""
+        val = await get_promo(code_)
+        if not (val is None):
+            if 'sale' in list(val.keys()):
+                param = val['sale']
+
+                """Преобразование текущего времени к часовому поясу пользователя"""
+                dtime = await change_timedelta(datetime.datetime.now().strftime("%d.%m.%Y %X"), timezona)
+
+                """Окончание действия промокода"""
+                if param[1] == 'days':
+                    end = await change_timedelta(date + " 00:00:00", param[2] * 24)
+                    end = end.split()[0]
+                else:
+                    end = param[2]
+
+                if (await check_min_datetime(dtime, end + " 23:59:59")) == dtime:
+                    koff = param[0]
+
+    if not (p1 and p2):
+        if len(text) >= 3:
+            p1 = text[1]
+            p2 = text[2]
+        else:
+            status = ("Недостаточно значений❌\n"
+                      "Пример команды: /upgrade 1 1")
+
+    """Проверка количества легендарных персонажей"""
+    cursor = await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}')
+    if cursor[0] is None:
+        status = f"Нет легендарных {param2[7]}❌"
+    else:
+        num = cursor[0]
+
+    """Проверка на корректность данных"""
+    if p2 in ['1', '2', '3'] and p1 in [str(x) for x in range(1, num + 1)]:
+        """Получение уровня характеристики"""
+        value = (await select_from_db(
+            f'SELECT value{p2} FROM legendary WHERE user_id={message.from_user.id} AND id={p1}'))[0]
+        if value > 0.9:
+            status = "Достигнут максимальный уровень❌"
+    else:
+        status = ("Неверные значения❌\n"
+                  "Пример команды: /upgrade 1 1")
+
+    """Получение баланса"""
+    if kol < int(price[1] * koff):
+        status = f"Недостаточно {param1[7]}❌"
+
+    if status == "OK":
+        """Запись в БД, ответ пользователю"""
+        add = param3[5 + int(p2)]
+
+        await insert_into_db(f'UPDATE stat SET kol={kol - int(price[1] * koff)} WHERE user_id={message.from_user.id}')
+        await insert_into_db(
+            f'UPDATE legendary SET value{p2} = {round(value + 0.1, 1)} WHERE user_id={message.from_user.id} AND id={p1}')
+
+        await message.reply(f'Вы прокачали {add} до {round(value + 0.1, 1)}!\n'
+                            f'Ваш баланс: {kol - int(price[1] * koff)}{param1[13]}\n', reply_markup=main_keyboard)
+    else:
+        await message.reply(status, reply_markup=main_keyboard)
 
 
 """Сделать персонажа коллекционным"""
@@ -377,7 +464,8 @@ async def collect_main(message: Message, num_="") -> None:
         """Запись в БД, ответ пользователю"""
         await insert_into_db(
             f'UPDATE legendary SET class1="{value1}", class2="{value2}", class3="{value3}" WHERE user_id={message.from_user.id} AND id={int(num)}')
-        await insert_into_db(f'UPDATE stat SET kol={balance - int(price[2] * koff)} WHERE user_id={message.from_user.id}')
+        await insert_into_db(
+            f'UPDATE stat SET kol={balance - int(price[2] * koff)} WHERE user_id={message.from_user.id}')
         await message.reply(f'{param2[0].capitalize()} №{num} стал коллекционн{add2}!{param2[14]}\n'
                             f'{param3[0]}: {value1}\n'
                             f'{param3[1]}: {value2}\n'
@@ -393,7 +481,54 @@ async def collect_main(message: Message, num_="") -> None:
 
 @dp.message(Command(commands=['name']))
 async def naming_main(message: Message, id_="", name_="") -> None:
-    await naming(message, id_, name_)
+    if len(message.text.split()) >= 3 or name_:
+        if not name_:
+            id_ = message.text.split()[1]
+            name_ = ' '.join(message.text.split()[2:])
+
+        count = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
+        if count is None:
+            count = 0
+        try:
+            """Проверка на наличие легендарных персонажей"""
+            if 1 <= int(id_) <= count:
+                """Проверка на возможную SQL-инъекцию"""
+                BOOL = '"' in name_ or "'" in name_ or ')' in name_ or \
+                       ']' in name_ or '}' in name_ or '--' in name_ or \
+                       '=' in name_ or 'union' in name_.lower() or \
+                       'concat' in name_.lower() or '*' in name_ or \
+                       ';' in name_ or '@' in name_ or '|' in name_ or \
+                       (r'\ '[0]) in name_ or '%' in name_ or \
+                       '#' in name_ or '&' in name_ or '$' in name_ or \
+                       'select' in name_.lower() or 'where' in name_.lower() or \
+                       '/' in name_ or 'delete' in name_.lower()
+                if not BOOL:
+                    if len(name_) <= 25:
+                        """Запись в БД, ответ пользователю"""
+                        await insert_into_db(
+                                f'UPDATE legendary SET name="{name_}" WHERE id={id_} AND user_id={message.from_user.id}')
+                        await message.reply('Имя изменено!',
+                                            reply_markup=main_keyboard)
+                    else:
+                        await message.reply('Слишком длинное имя❌', reply_markup=main_keyboard)
+                else:
+                    await message.reply('Недопустимые символы❌',
+                                        reply_markup=main_keyboard)
+                    cursor = await select_from_db(f'SELECT * FROM admins')
+                    for ADMIN in cursor:
+                        if ADMIN[2]:
+                            await bot.send_message(ADMIN[0],
+                                                   f'Попытка SQL-инъекции\nID: {message.from_user.id}\nТекст: {name_}')
+            else:
+                await message.reply(f'Неверный номер {param2[1]}❌',
+                                    reply_markup=main_keyboard)
+        except ValueError:
+            await message.reply(f'Неверный номер {param2[1]}❌',
+                                reply_markup=main_keyboard)
+    else:
+        await message.reply('Недостаточно значений❌\n'
+                            'Пример команды: /name 1 Имя',
+                            reply_markup=main_keyboard)
 
 
 """Смена часового пояса"""
@@ -401,7 +536,48 @@ async def naming_main(message: Message, id_="", name_="") -> None:
 
 @dp.message(Command(commands=['time', 'timezone', 'set_time']))
 async def timezone_main(message: Message, timer="") -> None:
-    await timezone(message, timer)
+    if len(message.text.split()) >= 2 or timer:
+        if not timer:
+            timer = message.text.split()[1]
+
+        try:
+            if -15 <= int(timer) <= 11:
+                timer = int(timer)
+                """Получение значений"""
+                cursor = await select_from_db(
+                    f'SELECT last, time FROM stat WHERE user_id={message.from_user.id}')
+
+                try:
+                    last = cursor[0]
+                    old_time = cursor[1]
+                    await insert_into_db(
+                        f'UPDATE stat SET time={timer} WHERE user_id={message.from_user.id}')
+
+                    """Смена часового пояса в записи в БД"""
+                    if not (last is None):
+                        new_last = await change_timedelta(last, timer - old_time)
+                        """Запись в БД, ответ пользователю"""
+                        await insert_into_db(
+                            f'UPDATE stat SET last="{new_last}" WHERE user_id={message.from_user.id}')
+
+                except IndexError:
+                    await insert_into_db(
+                        f"INSERT INTO stat(user_id, kol, koff, gets_kol, time, streak, activity) VALUES ({message.from_user.id}, 0, 0, 0, {timer}, 1, 0)")
+
+                await message.reply(f'Время изменено на МСК{"+" if timer >= 0 else ""}{timer}',
+                                    reply_markup=main_keyboard)
+            else:
+                await message.reply('Неверное значение❌\n'
+                                    'Пример команды: /time +1',
+                                    reply_markup=main_keyboard)
+        except ValueError:
+            await message.reply('Неверное значение❌\n'
+                                'Пример команды: /time +1',
+                                reply_markup=main_keyboard)
+    else:
+        await message.reply('Недостаточно значений❌\n'
+                            'Пример команды: /time +1',
+                            reply_markup=main_keyboard)
 
 
 """Активация промокода"""
@@ -409,7 +585,49 @@ async def timezone_main(message: Message, timer="") -> None:
 
 @dp.message(Command(commands=['promo', 'promocode', 'activate']))
 async def activate_main(message: Message, promo="") -> None:
-    await activate(message, promo)
+    bonus = False
+    PROMO = await select_from_db(f"SELECT promo FROM stat WHERE user_id={message.from_user.id}")
+    if len(PROMO) == 0:
+        await insert_into_db(
+            f"INSERT INTO stat(user_id, kol, koff, gets_kol, time, streak, activity) VALUES ({message.from_user.id}, 0, 0, 0, 0, 1, 0)")
+    """Проверка, отсутствует ли активированный промокод"""
+    if PROMO[0] is None:
+        """Проверка, был ли передан промокод"""
+        if promo == "":
+            text = message.text.split()
+            if len(text) >= 2:
+                promo = text[1]
+                if not ((await get_promo(promo)) is None):
+                    bonus = await get_promo(promo)
+                else:
+                    await message.reply("Промокод не найден❌")
+            else:
+                await message.reply("Промокод не введён❌")
+        else:
+            bonus = await get_promo(promo)
+
+        if bonus:
+            """Преобразование текущего времени к часовому поясу пользователя"""
+            timezona = (await select_from_db(f"SELECT time FROM stat WHERE user_id={message.from_user.id}"))[0]
+            dtime = await change_timedelta(datetime.datetime.now().strftime("%d.%m.%Y %X"), timezona)
+
+            """Отделение даты"""
+            dtime = dtime.split()[0]
+
+            """Запись промокода и даты активации"""
+            await insert_into_db(f'UPDATE stat SET promo="{promo};{dtime}" WHERE user_id={message.from_user.id}')
+
+            """Выдача вознаграждений"""
+            keys = list(bonus.keys())
+            if "balance" in keys:
+                kol = await select_from_db(f"SELECT kol FROM stat WHERE user_id={message.from_user.id}")
+                await insert_into_db(f"UPDATE stat SET kol={kol[0] + bonus["balance"]} WHERE user_id={message.from_user.id}")
+                await message.reply(f"Зачислено {bonus["balance"]}{param1[13]}")
+            if "buy" in keys:
+                await buy_main(message, promo=bonus["buy"])
+
+    else:
+        await message.reply("Вы уже активировали промокод❌")
 
 
 @dp.message(Command(commands=['new_admin', 'add_admin']))
@@ -476,42 +694,99 @@ async def start_button(message: Message):
 
 @dp.message(F.text == main_keyboard.keyboard[2][0].text)
 async def upgrade_button_main(message: Message, state: FSMContext):
-    await upgrade_button(message, state)
+    num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
+    if num is None:
+        num = 0
+    await message.reply(f"Введите номер {param2[1]} и номер характеристики через пробел. Всего у вас: {num}{param2[13]}",
+                        reply_markup=cancel_keyboard)
+    await state.set_state(Form1.value)
 
 
 @dp.message(Form1.value)
 async def process_upgrade_button_main(message: Message, state: FSMContext):
-    await process_upgrade_button(message, state)
+    form = await state.update_data(value=message.text)
+    max_num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
+    if max_num is None:
+        max_num = 0
+    num: str = form['value']
+    if len(num.split()) >= 2:
+        p1 = num.split()[0]
+        p2 = num.split()[1]
+        await upgrade_main(message, p1, p2)
+    else:
+        await message.reply("Недостаточно значений❌",
+                            reply_markup=main_keyboard)
+    await state.clear()
 
 
 @dp.message(F.text == main_keyboard.keyboard[2][1].text)
 async def name_button_main(message: Message, state: FSMContext):
-    await name_button(message, state)
+    max_num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
+    if max_num is None:
+        max_num = 0
+    await message.reply(f"Введите номер {param2[1]} и имя через пробел. Всего у вас: {max_num}{param2[13]}",
+                        reply_markup=cancel_keyboard)
+    await state.set_state(Form2.value)
 
 
 @dp.message(Form2.value)
 async def process_name_button_main(message: Message, state: FSMContext):
-    await process_name_button(message, state)
+    form = await state.update_data(value=message.text)
+    max_num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
+    if max_num is None:
+        max_num = 0
+    num: str = form['value']
+    if len(num.split()) >= 2:
+        id_ = num.split()[0]
+        name_ = ' '.join(num.split()[1:])
+        await naming_main(message, id_, name_)
+    else:
+        await message.reply("Недостаточно значений❌",
+                            reply_markup=main_keyboard)
+    await state.clear()
 
 
 @dp.message(F.text == main_keyboard.keyboard[3][0].text)
 async def collect_button_main(message: Message, state: FSMContext):
-    await collect_button(message, state)
+    max_num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
+    if max_num is None:
+        max_num = 0
+    await message.reply(f"Введите номер {param2[1]}. Всего у вас: {max_num}{param2[13]}",
+                        reply_markup=cancel_keyboard)
+    await state.set_state(Form3.value)
 
 
 @dp.message(Form3.value)
 async def process_collect_button_main(message: Message, state: FSMContext):
-    await process_collect_button(message, state)
+    form = await state.update_data(value=message.text)
+    max_num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
+    if max_num is None:
+        max_num = 0
+    num: str = form['value']
+    id_ = num.split()[0]
+    await collect_main(message, id_)
+    await state.clear()
 
 
 @dp.message(F.text == main_keyboard.keyboard[4][1].text)
 async def time_button_main(message: Message, state: FSMContext):
-    await time_button(message, state)
+    await message.reply("Выберите свой часовой пояс из списка",
+                        reply_markup=time_keyboard)
+    await state.set_state(Form4.value)
 
 
 @dp.message(Form4.value)
 async def process_time_button_main(message: Message, state: FSMContext):
-    await process_time_button(message, state)
+    form = await state.update_data(value=message.text)
+    num: str = form['value']
+    zones = [y[0].text for y in (x for x in time_keyboard.keyboard)] + [y[1].text for y in (x for x in time_keyboard.keyboard)]
+    if num in zones:
+        num = str(int(num.split()[0][3:]) - 3)
+        await timezone_main(message, num)
+    else:
+        await message.reply("Неверное значение",
+                            reply_markup=main_keyboard)
+    await state.clear()
 
 
 """Стартовое сообщение с списком команд"""
@@ -520,7 +795,17 @@ async def process_time_button_main(message: Message, state: FSMContext):
 @dp.message(CommandStart())
 @dp.message(F.text == main_keyboard.keyboard[0][0].text)
 async def start_main(message: Message, command: CommandObject = CommandObject()) -> None:
-    await start(message, command)
+    if len(await select_from_db(f'SELECT * FROM stat WHERE user_id={message.from_user.id}')) == 0:
+        """Запись нового пользователя"""
+        await insert_into_db(
+            f"INSERT INTO stat(user_id, kol, koff, gets_kol, time, streak, activity) VALUES ({message.from_user.id}, 0, 0, 0, 0, 1, 0)")
+
+    await message.reply(START_TEXT, reply_markup=main_keyboard)
+
+    """Проверка на наличие промокода"""
+    if command.args:
+        if not ((await get_promo(command.args)) is None):
+            await activate_main(message, promo=command.args)
 
 
 @dp.message(F.text == main_keyboard.keyboard[0][1].text)
@@ -750,7 +1035,8 @@ async def buy_main(message: Message, promo=0) -> None:
         value3 = random.choice(chance)
 
         """Запись в БД, ответ пользователю"""
-        await insert_into_db(f'UPDATE stat SET kol={balance - int(price[0] * koff)} WHERE user_id={message.from_user.id}')
+        await insert_into_db(
+            f'UPDATE stat SET kol={balance - int(price[0] * koff)} WHERE user_id={message.from_user.id}')
         await insert_into_db(f'INSERT INTO legendary(id, user_id, animal, value1, value2, value3, sell) VALUES({
         num}, {message.from_user.id}, "{name_}", {value1}, {value2}, {value3}, 0)')
 
@@ -764,28 +1050,260 @@ async def buy_main(message: Message, promo=0) -> None:
     elif balance < int(price[0] * koff):
         await message.reply(f'Недостаточно {param1[7]}❌')
 
+
 """Профиль"""
 
 
 @dp.message(F.text == main_keyboard.keyboard[3][1].text)
 @dp.message(Command(commands=['me']))
 async def me_main(message: Message) -> None:
-    await me(message)
+    text1 = ''
+    count1 = 0
+    text2 = ''
+    count2 = 0
+    h2 = ""
+
+    """Получение профиля пользователя"""
+    prof = await select_from_db(f'SELECT * FROM stat WHERE user_id={message.from_user.id}')
+    if len(prof) == 0:
+        await insert_into_db(
+            f"INSERT INTO stat(user_id, kol, koff, gets_kol, time, streak, activity) VALUES ({message.from_user.id}, 0, 0, 0, 0, 1, 0)")
+    if not (prof[2] is None):
+        h2 = await change_timedelta(prof[2], 2)
+        """Преобразование текущего времени к часовому поясу пользователя"""
+        dtime = await change_timedelta(datetime.datetime.now().strftime("%d.%m.%Y %X"), prof[5])
+
+        BOOL = (await check_min_datetime(h2, dtime)) != h2
+    else:
+        BOOL = False
+
+    """Получение информации о легендарных персонажах"""
+    cursor = await select_from_db(f'SELECT * FROM legendary WHERE user_id={message.from_user.id}')
+    if len(cursor) == 0:
+        pass
+    elif type(cursor[0]) is type([]):
+        for row in cursor:
+            if row[4]:
+                count2 += 1
+                text2 += (f'№{row[0]}, {row[2]}{" " + row[3] if row[3] else ""}, '
+                          f'{param3[0]}: {row[4] if row[4] else row[5]}, '
+                          f'{param3[1]}: {row[6] if row[6] else row[7]}, '
+                          f'{param3[2]}: {row[8] if row[8] else row[9]}\n')
+            else:
+                count1 += 1
+                text1 += (f'№{row[0]}, {row[2]}{" " + row[3] if row[3] else ""}, '
+                          f'{param3[0]}: {row[4] if row[4] else row[5]}, '
+                          f'{param3[1]}: {row[6] if row[6] else row[7]}, '
+                          f'{param3[2]}: {row[8] if row[8] else row[9]}\n')
+    else:
+        if cursor[4]:
+            count2 = 1
+            text2 = (f'№{cursor[0]}, {cursor[2]}{" " + cursor[3] if cursor[3] else ""}, '
+                     f'{param3[0]}: {cursor[4] if cursor[4] else cursor[5]}, '
+                     f'{param3[1]}: {cursor[6] if cursor[6] else cursor[7]}, '
+                     f'{param3[2]}: {cursor[8] if cursor[8] else cursor[9]}\n')
+        else:
+            count1 = 1
+            text1 = (f'№{cursor[0]}, {cursor[2]}{" " + cursor[3] if cursor[3] else ""}, '
+                     f'{param3[0]}: {cursor[4] if cursor[4] else cursor[5]}, '
+                     f'{param3[1]}: {cursor[6] if cursor[6] else cursor[7]}, '
+                     f'{param3[2]}: {cursor[8] if cursor[8] else cursor[9]}\n')
+
+    # dtime = await str_to_datetime(dtime)
+    # h2 = await str_to_datetime(h2)
+    # delta = h2 - dtime
+    # HH = delta.days * 24 + delta.seconds // 3600
+    # MM = delta.seconds // 60 - delta.seconds // 3600 * 60
+    # HHMM = 'через ' + str(HH) + 'ч ' + str(MM) + 'мин'
+    """Ответ пользователю"""
+    await message.reply(f'🆔ID: {prof[0]}\n'
+                        f'{param1[13]}{param1[7].capitalize()}: {prof[1]}\n'
+                        f'🫴Всего получено: {prof[3]} раз{"а" if (prof[3] % 10 in [2, 3, 4] and prof[3] // 10 % 10 != 1) else ""}\n'
+                        f'↗️Ваш уровень: {prof[4] + 1} (x{koffs[prof[4]]})\n'
+                        f'{"🆙До следующего уровня: " +
+                           str(koffs_kol[prof[4] + 1] - prof[3]) if prof[4] + 1 != len(koffs_kol) else ""}\n'
+                        f'⏰Следующее получение: {h2 if BOOL else 'уже доступно! /get'}\n'
+                        # f'\n⚙️Часовой пояс: МСК{"+" if prof[5] >= 0 else ""}{prof[5]}'
+                        )
+    if count1 + count2:
+        await message.reply(f'{param2[13]}Легендарных {param2[7]}: {count1}\n{text1} \n'
+                            f'{param2[14]}Коллекционных {param2[7]}: {count2}\n{text2}')
 
 
 @dp.message(Command(commands=['sell']))
 async def sell_main(message: Message) -> None:
-    await sell(message)
+    change = False
+    price = 0
+
+    if len(message.text.split()) >= 2:
+        num = message.text.split()[1]
+        max_num = (await select_from_db(f"SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}"))[0]
+        if max_num is None:
+            max_num = 0
+
+        try:
+            if 1 <= int(num) <= max_num:
+                class_ = (await select_from_db(f"SELECT class1 FROM legendary WHERE id={int(num)} AND user_id={message.from_user.id}"))[0]
+                if not (class_ is None):
+                    change = True
+                else:
+                    await message.reply(f"Этот {param2[0]} не коллекционный❌")
+        except ValueError:
+            await message.reply("Неверные значения❌\n"
+                                "Пример команды: /sell 1 100\n"
+                                "/sell 1 0")
+
+        if len(message.text.split()) >= 3:
+            try:
+                price = int(message.text.split()[2])
+                if price < 0:
+                    price = 0
+            except ValueError:
+                price = 0
+
+        if change:
+            await insert_into_db(
+                f"UPDATE legendary SET sell={price} WHERE id={int(num)} AND user_id={message.from_user.id}")
+            if price > 0:
+                await message.reply(f"Цена на {param2[3]} изменена на {price}{param1[13]}")
+            else:
+                await message.reply(f"{param2[0].capitalize()} снят с продажи")
+    else:
+        await message.reply("Недостаточно значений❌\n"
+                            "Пример команды: /sell 1 100\n"
+                            "/sell 1 0")
 
 
 @dp.message(Command(commands=['market']))
 async def market_main(message: Message) -> None:
-    await market(message)
+    msg = message.text.split()
+    if len(msg) >= 4:
+        if msg[1] in values1 and msg[2] in values2 and msg[3] in values3:
+            check = await select_from_db(f'SELECT id, user_id, sell FROM legendary WHERE '
+                                         f'class1="{msg[1]}" AND class2="{msg[2]}" AND class3="{msg[3]}" AND sell > 0')
+            if len(check) > 0:
+                if check[1] != message.from_user.id:
+                    balance = (await select_from_db(f'SELECT kol FROM stat WHERE user_id={message.from_user.id}'))[0]
+                    if balance is None:
+                        balance = 0
+
+                    if balance >= check[2]:
+                        kol = (await select_from_db(f'SELECT kol FROM stat WHERE user_id={check[1]}'))[0]
+                        if kol is None:
+                            kol = 0
+                        await insert_into_db(f'UPDATE stat SET kol={kol + check[2]} WHERE user_id={check[1]}')
+                        await bot.send_message(check[1], f'{param2[0].capitalize()} №{check[0]} Продан. Зачислено: {check[2]}{param1[13]}')
+
+                        await insert_into_db(f'UPDATE stat SET kol={balance - check[2]} WHERE user_id={message.from_user.id}')
+                        num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
+                        if num is None:
+                            num = 1
+                        else:
+                            num += 1
+
+                        await insert_into_db(f'UPDATE legendary SET id={num}, user_id={message.from_user.id} WHERE '
+                                             f'class1="{msg[1]}" AND class2="{msg[2]}" AND class3="{msg[3]}"')
+
+                        await message.reply(f'{param2[0].capitalize()} куплен{param2[14]}')
+
+                        cursor = await select_from_db(f'SELECT id FROM legendary WHERE user_id={check[1]} AND id > {check[0]}')
+                        if not (type(cursor[0]) is type([])):
+                            cursor = [cursor]
+
+                        for i in cursor:
+                            await insert_into_db(f'UPDATE legendary SET id={i[0] - 1} WHERE id={i[0]} AND user_id={check[1]}')
+                    else:
+                        await message.reply(f"Недостаточно {param1[7]}❌")
+                else:
+                    await message.reply(f"Нельзя покупать {param2[9]} у себя❌")
+            else:
+                await message.reply(f"Такой {param2[0]} не продаётся❌")
+        else:
+            await message.reply("Неверные значения❌")
+    else:
+        await message.reply("Недостаточно значений❌")
 
 
 @dp.inline_query()
 async def inline_main(inline_query: InlineQuery):
-    await inline(inline_query)
+    query_id = inline_query.id
+    ans = []
+    v1, v2, v3 = False, False, False
+    if inline_query.query:
+        query = inline_query.query.split()
+        if query[0] in values1:
+            v1 = True
+        if len(query) >= 2:
+            if query[1] in values2:
+                v2 = True
+            if len(query) >= 3:
+                if query[2] in values3:
+                    v3 = True
+
+        if v1 and v2 and v3:
+            list_ = await select_from_db(f'SELECT animal, class1, class2, class3, sell '
+                                         f'FROM legendary WHERE class1="{query[0]}" AND '
+                                         f'class2="{query[1]}" AND class3="{query[2]}" AND sell > 0')
+        elif v1 and v2 and not v3:
+            list_ = await select_from_db(f'SELECT animal, class1, class2, class3, sell '
+                                         f'FROM legendary WHERE class1="{query[0]}" AND '
+                                         f'class2="{query[1]}" AND sell > 0')
+        elif v1 and not v2 and v3:
+            list_ = await select_from_db(f'SELECT animal, class1, class2, class3, sell '
+                                         f'FROM legendary WHERE class1="{query[0]}" AND '
+                                         f'class3="{query[2]}" AND sell > 0')
+        elif not v1 and v2 and v3:
+            list_ = await select_from_db(f'SELECT animal, class1, class2, class3, sell '
+                                         f'FROM legendary WHERE class2="{query[1]}" AND '
+                                         f'class3="{query[2]}" AND sell > 0')
+        elif v1 and not v2 and not v3:
+            list_ = await select_from_db(f'SELECT animal, class1, class2, class3, sell '
+                                         f'FROM legendary WHERE class1="{query[0]}" AND sell > 0')
+        elif not v1 and v2 and not v3:
+            list_ = await select_from_db(f'SELECT animal, class1, class2, class3, sell '
+                                         f'FROM legendary WHERE class2="{query[1]}" AND sell > 0')
+        elif not v1 and not v2 and v3:
+            list_ = await select_from_db(f'SELECT animal, class1, class2, class3, sell '
+                                         f'FROM legendary WHERE class3="{query[2]}" AND sell > 0')
+        else:
+            list_ = await select_from_db("SELECT animal, class1, class2, class3, sell FROM legendary WHERE sell > 0")
+
+        if len(list_) > 0:
+            if not (type(list_[0]) is type([])):
+                list_ = [list_]
+            for i in range(len(list_)):
+                a = InlineQueryResultArticle(id=str(i),
+                                             type=InlineQueryResultType.ARTICLE,
+                                             title=f'{list_[i][0]} за {list_[i][4]}{param1[13]}',
+                                             thumbnail_url='https://emojigraph.org/media/apple/teddy-bear_1f9f8.png',
+                                             input_message_content=InputTextMessageContent(
+                                                 message_text=f'/market {list_[i][1]} {list_[i][2]} {list_[i][3]}'
+                                             ),
+                                             hide_url=True,
+                                             description=f'{param3[0]}: {list_[i][1]}\n'
+                                                         f'{param3[1]}: {list_[i][2]}\n'
+                                                         f'{param3[2]}: {list_[i][3]}\n')
+                ans.append(a)
+        else:
+            a = InlineQueryResultArticle(id=query_id,
+                                         type=InlineQueryResultType.ARTICLE,
+                                         title=f'В продаже ничего нет.',
+                                         input_message_content=InputTextMessageContent(
+                                             message_text='Это сообщение ничего не делает.'
+                                         ),
+                                         hide_url=True)
+            ans.append(a)
+    else:
+        a = InlineQueryResultArticle(id=query_id,
+                                     type=InlineQueryResultType.ARTICLE,
+                                     title=f'Начните ввод.',
+                                     input_message_content=InputTextMessageContent(
+                                         message_text='Это сообщение ничего не делает.'
+                                     ),
+                                     hide_url=True)
+        ans.append(a)
+
+    await inline_query.answer(ans)
 
 
 async def on_startup():
@@ -812,10 +1330,3 @@ async def main():
 
 if __name__ == '__main__':
     asyncio.run(main())
-  
-
-
-
-
-
-
