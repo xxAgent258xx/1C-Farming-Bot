@@ -271,10 +271,9 @@ CMD_TEXT =\
     '/collect {1} - сделать ' + \
     f'легендарн{add1} {param2[3]} коллекционн{add2} за {price[2]} {param1[7]}{param1[13]}\n' + \
     '/sell {1} {6} - выставить на продажу ' + f'коллекционн{add1} {param2[3]}\n' + \
-    f'@wuppit_bot ' + '{7} {7} {7} - найти ' + f'коллекционн{add1} {param2[3]}\n' + \
-    '(для пропуска фильтра любой символ)\n' + \
+    f'@wuppit_bot ' + '{7} {7} {7} - открыть Маркет (для пропуска фильтра любой символ)\n' + \
     '/market {7} {7} {7} - приобрести ' + f'коллекционн{add1} {param2[3]}\n' + \
-    '/name {1} {3} - задать имя ' + f'коллекционн{add3} {param2[2]}\n' + \
+    '/name {1} {3} - задать имя ' + f'{param2[2]}\n' + \
     '/me - посмотреть профиль\n' + \
     '/promo {4} - активировать промокод\n' + \
     '/time {5} - сменить разницу времени с МСК\n' + \
@@ -371,7 +370,7 @@ async def upgrade_main(message: Message, p1="", p2="") -> None:
         """Запись в БД, ответ пользователю"""
         add = param3[5 + int(p2)]
 
-        lvls = min(kol // int(price[1] * koff), 1 - value)
+        lvls = min(kol // int(price[1] * koff), (1 - value) * 10)
         new_kol = kol - lvls * int(price[1] * koff)
         new_value = round(value + 0.1 * lvls, 1)
 
@@ -728,8 +727,27 @@ async def upgrade_button_main(message: Message, state: FSMContext):
     num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
     if num is None:
         num = 0
+
+    cursor = await select_from_db(
+        f'SELECT id, value1, value2, value3 FROM legendary WHERE user_id={message.from_user.id} AND (value1 < 1 OR value2 < 1 OR value3 < 1)')
+    if not (type(cursor[0]) is type([])):
+        cursor = [cursor]
+    keyboard = ReplyKeyboardMarkup(keyboard=[], resize_keyboard=True)
+    value = [[KeyboardButton(text='◀️ Отмена')]]
+    for i in cursor:
+        a = []
+        if i[1] < 1:
+            a.append(KeyboardButton(text=f'{i[0]} 1'))
+        if i[2] < 1:
+            a.append(KeyboardButton(text=f'{i[0]} 2'))
+        if i[3] < 1:
+            a.append(KeyboardButton(text=f'{i[0]} 3'))
+        if a:
+            value.append(a)
+    keyboard.keyboard = value
+
     await message.reply(f"Введите номер {param2[1]} и номер характеристики через пробел. Всего у вас {param2[7]}: {num}",
-                        reply_markup=cancel_keyboard)
+                        reply_markup=keyboard)
     await state.set_state(Form1.value)
 
 
@@ -927,9 +945,11 @@ async def get_main(message: Message) -> None:
                 have_bonus = True
 
             """Проверка на серию входов"""
+            streak = (await select_from_db(f"SELECT streak FROM stat WHERE user_id={message.from_user.id}"))[0] + 1
             tomorrow = await change_timedelta(bonus_date + " 00:00:00", 24)
-            if (await check_min_datetime(user_date, tomorrow)) == 0:
-                streak = (await select_from_db(f"SELECT streak FROM stat WHERE user_id={message.from_user.id}"))[0] + 1
+            if bonus_date == user_date.split()[0]:
+                streak -= 1
+            elif user_date == tomorrow:
                 await insert_into_db(f'UPDATE stat SET streak={streak} WHERE user_id={message.from_user.id}')
             else:
                 streak = 0
@@ -1252,8 +1272,8 @@ async def market_main(message: Message) -> None:
                 await message.reply(f"Такой {param2[0]} не продаётся❌")
         else:
             await message.reply("Неверные значения❌\n"
-                                f"Список продающихся {param2[7]} в Маркете.\n"
-                                "Подробнее /menu")
+                                f"Список продающихся {param2[7]} в Маркете:\n"
+                                "t.me/share/?url=wuppit_bot%20_ (Добавьте @ в начало)")
     else:
         await message.reply("Недостаточно значений❌")
 
@@ -1321,7 +1341,8 @@ async def inline_main(inline_query: InlineQuery):
         else:
             a = InlineQueryResultArticle(id=query_id,
                                          type=InlineQueryResultType.ARTICLE,
-                                         title=f'В продаже ничего нет.',
+                                         title=f'В продаже ничего нет',
+                                         description='Попробуйте изменить фильтры',
                                          input_message_content=InputTextMessageContent(
                                              message_text='Это сообщение ничего не делает.'
                                          ),
@@ -1330,7 +1351,8 @@ async def inline_main(inline_query: InlineQuery):
     else:
         a = InlineQueryResultArticle(id=query_id,
                                      type=InlineQueryResultType.ARTICLE,
-                                     title=f'Начните ввод.',
+                                     title=f'Начните ввод',
+                                     description='Поставьте любой символ для пропуска фильтра',
                                      input_message_content=InputTextMessageContent(
                                          message_text='Это сообщение ничего не делает.'
                                      ),
