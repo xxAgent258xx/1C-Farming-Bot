@@ -103,7 +103,7 @@ koffs_kol = [0, 10, 50, 100, 500, 1000, 2500, 5000, 10000, 25000, 50000]
 storage = MemoryStorage()
 bot = Bot(token=FARMING_BOT_TOKEN)
 dp = Dispatcher(storage=storage)
-DB_NAME = '/data/1c.db'
+DB_NAME = '1c.db'
 
 """Меню бота"""
 main_keyboard = ReplyKeyboardMarkup(keyboard=[
@@ -298,12 +298,10 @@ async def cancel(message: Message, state: FSMContext):
 """Прокачка легендарного персонажа"""
 
 
-@dp.message(Command(commands=['upgrade']))
 async def upgrade_main(message: Message, p1="", p2="") -> None:
     status = "OK"
     num = 0
     text = message.text.split()
-    add = ''
     value = 0.0
     koff = 1
     cursor = await select_from_db(f'SELECT kol, time, promo FROM stat WHERE user_id={message.from_user.id}')
@@ -371,7 +369,7 @@ async def upgrade_main(message: Message, p1="", p2="") -> None:
         add = param3[5 + int(p2)]
 
         lvls = min(kol // int(price[1] * koff), (1 - value) * 10)
-        new_kol = kol - lvls * int(price[1] * koff)
+        new_kol = round(kol - lvls * int(price[1] * koff), 0)
         new_value = round(value + 0.1 * lvls, 1)
 
         await insert_into_db(f'UPDATE stat SET kol={new_kol} WHERE user_id={message.from_user.id}')
@@ -683,7 +681,6 @@ async def new_admin_main(message: Message) -> None:
 
 @dp.message(Command(commands=['execute', 'script', 'insert']))
 async def execute(message: Message) -> None:
-    cmd = ""
     if len(message.text.split()) >= 2:
         cmd = ' '.join(message.text.split()[1:])
         cursor = await select_from_db(f'SELECT * FROM admins WHERE id={message.from_user.id}')
@@ -699,7 +696,6 @@ async def execute(message: Message) -> None:
 
 @dp.message(Command(commands=['select']))
 async def select(message: Message) -> None:
-    cmd = ""
     if len(message.text.split()) >= 2:
         cmd = ' '.join(message.text.split()[1:])
         cursor = await select_from_db(f'SELECT * FROM admins WHERE id={message.from_user.id}')
@@ -722,12 +718,15 @@ async def start_button(message: Message):
     await message.reply(CMD_TEXT, reply_markup=main_keyboard)
 
 
+@dp.message(Command(commands=['upgrade']))
 @dp.message(F.text == main_keyboard.keyboard[2][0].text)
 async def upgrade_button_main(message: Message, state: FSMContext):
     num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
     if num is None:
         num = 0
-
+    kol = (await select_from_db(f'SELECT kol FROM stat WHERE user_id={message.from_user.id}'))[0]
+    if kol is None:
+        kol = 0
     cursor = await select_from_db(
         f'SELECT id, value1, value2, value3 FROM legendary WHERE user_id={message.from_user.id} AND (value1 < 1 OR value2 < 1 OR value3 < 1)')
     if not (type(cursor[0]) is type([])):
@@ -737,11 +736,17 @@ async def upgrade_button_main(message: Message, state: FSMContext):
     for i in cursor:
         a = []
         if i[1] < 1:
-            a.append(KeyboardButton(text=f'{i[0]} 1'))
+            lvls = min(kol // price[1], (1 - i[1]) * 10)
+            new_value = round(i[1] + 0.1 * lvls, 1)
+            a.append(KeyboardButton(text=f'{i[0]} 1\n(с {i[1]} до {new_value})'))
         if i[2] < 1:
-            a.append(KeyboardButton(text=f'{i[0]} 2'))
+            lvls = min(kol // price[1], (1 - i[2]) * 10)
+            new_value = round(i[2] + 0.1 * lvls, 1)
+            a.append(KeyboardButton(text=f'{i[0]} 2\n(с {i[2]} до {new_value})'))
         if i[3] < 1:
-            a.append(KeyboardButton(text=f'{i[0]} 3'))
+            lvls = min(kol // price[1], (1 - i[3]) * 10)
+            new_value = round(i[3] + 0.1 * lvls, 1)
+            a.append(KeyboardButton(text=f'{i[0]} 3\n(с {i[3]} до {new_value})'))
         if a:
             value.append(a)
     keyboard.keyboard = value
@@ -752,11 +757,8 @@ async def upgrade_button_main(message: Message, state: FSMContext):
 
 
 @dp.message(Form1.value)
-async def process_upgrade_button_main(message: Message, state: FSMContext):
+async def process_upgrade_button_main(message: Message, state: FSMContext = FSMContext):
     form = await state.update_data(value=message.text)
-    max_num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
-    if max_num is None:
-        max_num = 0
     num: str = form['value']
     if len(num.split()) >= 2:
         p1 = num.split()[0]
@@ -781,9 +783,6 @@ async def name_button_main(message: Message, state: FSMContext):
 @dp.message(Form2.value)
 async def process_name_button_main(message: Message, state: FSMContext):
     form = await state.update_data(value=message.text)
-    max_num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
-    if max_num is None:
-        max_num = 0
     num: str = form['value']
     if len(num.split()) >= 2:
         id_ = num.split()[0]
@@ -808,9 +807,6 @@ async def collect_button_main(message: Message, state: FSMContext):
 @dp.message(Form3.value)
 async def process_collect_button_main(message: Message, state: FSMContext):
     form = await state.update_data(value=message.text)
-    max_num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
-    if max_num is None:
-        max_num = 0
     num: str = form['value']
     id_ = num.split()[0]
     await collect_main(message, id_)
@@ -1186,7 +1182,6 @@ async def me_main(message: Message) -> None:
 async def sell_main(message: Message) -> None:
     change = False
     price = 0
-
     if len(message.text.split()) >= 2:
         num = message.text.split()[1]
         max_num = (await select_from_db(f"SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}"))[0]
