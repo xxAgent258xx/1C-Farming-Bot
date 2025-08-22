@@ -103,7 +103,7 @@ koffs_kol = [0, 10, 50, 100, 500, 1000, 2500, 5000, 10000, 25000, 50000]
 storage = MemoryStorage()
 bot = Bot(token=FARMING_BOT_TOKEN)
 dp = Dispatcher(storage=storage)
-DB_NAME = '1c.db'
+DB_NAME = '/data/1c.db'
 
 """Меню бота"""
 main_keyboard = ReplyKeyboardMarkup(keyboard=[
@@ -117,6 +117,7 @@ main_keyboard = ReplyKeyboardMarkup(keyboard=[
 
 # main_keyboard.keyboard[0][0].text
 time_keyboard = ReplyKeyboardMarkup(keyboard=[
+    [KeyboardButton(text='◀️ Отмена')],
     [KeyboardButton(text='UTC+2 (МСК-1)'), KeyboardButton(text='UTC+3 (МСК)')],
     [KeyboardButton(text='UTC+4 (МСК+1)'), KeyboardButton(text='UTC+5 (МСК+2)')],
     [KeyboardButton(text='UTC+6 (МСК+3)'), KeyboardButton(text='UTC+7 (МСК+4)')],
@@ -247,6 +248,7 @@ class Form1(StatesGroup):
 
 class Form2(StatesGroup):
     value = State()
+    name = State()
 
 
 class Form3(StatesGroup):
@@ -507,7 +509,6 @@ async def collect_main(message: Message, num_="") -> None:
 """Присвоение имени легендарному персонажу"""
 
 
-@dp.message(Command(commands=['name']))
 async def naming_main(message: Message, id_="", name_="") -> None:
     if len(message.text.split()) >= 3 or name_:
         if not name_:
@@ -562,7 +563,6 @@ async def naming_main(message: Message, id_="", name_="") -> None:
 """Смена часового пояса"""
 
 
-@dp.message(Command(commands=['time', 'timezone', 'set_time']))
 async def timezone_main(message: Message, timer="") -> None:
     if len(message.text.split()) >= 2 or timer:
         if not timer:
@@ -770,27 +770,36 @@ async def process_upgrade_button_main(message: Message, state: FSMContext = FSMC
     await state.clear()
 
 
+@dp.message(Command(commands=['name']))
 @dp.message(F.text == main_keyboard.keyboard[2][1].text)
 async def name_button_main(message: Message, state: FSMContext):
     max_num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
     if max_num is None:
         max_num = 0
-    await message.reply(f"Введите номер {param2[1]} и имя через пробел. Всего у вас {param2[7]}: {max_num}",
-                        reply_markup=cancel_keyboard)
+    board = [[KeyboardButton(text='◀️ Отмена')]]
+    for i in range(max_num // 4):
+        board.append([KeyboardButton(text=f'{4 * i + x}') for x in range(1, 5)])
+    if max_num % 4:
+        board.append([KeyboardButton(text=f'{x}') for x in range(max_num // 4 * 4 + 1, max_num + 1)])
+    keyboard = ReplyKeyboardMarkup(keyboard=board, resize_keyboard=True)
+    await message.reply(f"Введите номер {param2[1]}. Всего у вас {param2[7]}: {max_num}",
+                        reply_markup=keyboard)
     await state.set_state(Form2.value)
 
 
 @dp.message(Form2.value)
-async def process_name_button_main(message: Message, state: FSMContext):
+async def name_button_main2(message: Message, state: FSMContext):
     form = await state.update_data(value=message.text)
-    num: str = form['value']
-    if len(num.split()) >= 2:
-        id_ = num.split()[0]
-        name_ = ' '.join(num.split()[1:])
-        await naming_main(message, id_, name_)
-    else:
-        await message.reply("Недостаточно значений❌",
-                            reply_markup=main_keyboard)
+    await message.reply(f'Введите имя {param2[1]}.', reply_markup=cancel_keyboard)
+    await state.set_state(Form2.name)
+
+
+@dp.message(Form2.name)
+async def process_name_button_main(message: Message, state: FSMContext):
+    form = await state.update_data(name=message.text)
+    num = form['value']
+    name_ = form['name']
+    await naming_main(message, num, name_)
     await state.clear()
 
 
@@ -799,8 +808,14 @@ async def collect_button_main(message: Message, state: FSMContext):
     max_num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
     if max_num is None:
         max_num = 0
+    board = [[KeyboardButton(text='◀️ Отмена')]]
+    for i in range(max_num // 4):
+        board.append([KeyboardButton(text=f'{4 * i + x}') for x in range(1, 5)])
+    if max_num % 4:
+        board.append([KeyboardButton(text=f'{x}') for x in range(max_num // 4 * 4 + 1, max_num + 1)])
+    keyboard = ReplyKeyboardMarkup(keyboard=board, resize_keyboard=True)
     await message.reply(f"Введите номер {param2[1]}. Всего у вас {param2[7]}: {max_num}",
-                        reply_markup=cancel_keyboard)
+                        reply_markup=keyboard)
     await state.set_state(Form3.value)
 
 
@@ -813,6 +828,7 @@ async def process_collect_button_main(message: Message, state: FSMContext):
     await state.clear()
 
 
+@dp.message(Command(commands=['time', 'timezone', 'set_time']))
 @dp.message(F.text == main_keyboard.keyboard[4][1].text)
 async def time_button_main(message: Message, state: FSMContext):
     await message.reply("Выберите свой часовой пояс из списка",
