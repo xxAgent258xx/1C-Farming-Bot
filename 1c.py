@@ -259,6 +259,15 @@ class Form4(StatesGroup):
     value = State()
 
 
+class Form5(StatesGroup):
+    value = State()
+    cost = State()
+
+
+class Form6(StatesGroup):
+    value = State()
+
+
 START_TEXT = \
     'Добро пожаловать в увлекательную игру!\n' + \
     f'Здесь ты сможешь получать {param1[9]}, покупать легендарные {param2[6]}, прокачивать их и делать коллекционными!\n' + \
@@ -268,25 +277,19 @@ CMD_TEXT =\
     '📋Список команд:\n' + \
     f'/get - получить {param1[3]}{param1[13]}\n' + \
     f'/buy - купить легендарн{add1} {param2[3]} за {price[0]} {param1[7]}{param1[13]}\n' + \
-    '/upgrade {1} {2} - прокачать ' + \
+    '/upgrade - прокачать ' + \
     f'легендарн{add1} {param2[3]} за {price[1]} {param1[7]}{param1[13]}\n' + \
-    '/collect {1} - сделать ' + \
+    '/collect - сделать ' + \
     f'легендарн{add1} {param2[3]} коллекционн{add2} за {price[2]} {param1[7]}{param1[13]}\n' + \
-    '/sell {1} {6} - выставить на продажу ' + f'коллекционн{add1} {param2[3]}\n' + \
-    f'@wuppit_bot ' + '{7} {7} {7} - открыть Маркет (для пропуска фильтра любой символ)\n' + \
-    '/market {7} {7} {7} - приобрести ' + f'коллекционн{add1} {param2[3]}\n' + \
-    '/name {1} {3} - задать имя ' + f'{param2[2]}\n' + \
+    '/sell - выставить на продажу ' + f'коллекционн{add1} {param2[3]}\n' + \
+    '@wuppit_bot 🔤 🔤 🔤 - открыть Маркет (для пропуска фильтра любой символ)\n' + \
+    '/market 🔤 🔤 🔤 - приобрести ' + f'коллекционн{add1} {param2[3]}\n' + \
+    '/name - задать имя ' + f'{param2[2]}\n' + \
     '/me - посмотреть профиль\n' + \
-    '/promo {4} - активировать промокод\n' + \
-    '/time {5} - сменить разницу времени с МСК\n' + \
-    '\nПараметры (указываются без фигурных скобок)\n' + \
-    '{1} - номер ' + f'{param2[1]}, с которым совершается действие\n' + \
-    '{2} - номер характеристики (1, 2 или 3)\n' + \
-    '{3} - имя ' + f'{param2[1]}\n' + \
-    '{4} - промокод\n' + \
-    '{5} - разница во времени от -15 до +11\n' + \
-    '{6} - цена (0 для снятия с продажи)\n' + \
-    '{7} - значение характеристики\n'
+    '/promo - активировать промокод\n' + \
+    '/time - сменить разницу времени с МСК\n' + \
+    '\nПараметры:\n' + \
+    '🔤 - значение характеристики (слово)\n'
 
 logging.basicConfig(level=logging.INFO)
 
@@ -611,7 +614,6 @@ async def timezone_main(message: Message, timer="") -> None:
 """Активация промокода"""
 
 
-@dp.message(Command(commands=['promo', 'promocode', 'activate']))
 async def activate_main(message: Message, promo="") -> None:
     bonus = False
     PROMO = await select_from_db(f"SELECT promo FROM stat WHERE user_id={message.from_user.id}")
@@ -653,7 +655,8 @@ async def activate_main(message: Message, promo="") -> None:
                 await message.reply(f"Зачислено {bonus["balance"]}{param1[13]}")
             if "buy" in keys:
                 await buy_main(message, promo=bonus["buy"])
-
+        else:
+            await message.reply("Промокод не найден❌")
     else:
         await message.reply("Вы уже активировали промокод❌")
 
@@ -847,6 +850,85 @@ async def process_time_button_main(message: Message, state: FSMContext):
     else:
         await message.reply("Неверное значение",
                             reply_markup=main_keyboard)
+    await state.clear()
+
+
+@dp.message(Command(commands=['sell']))
+async def sell_main(message: Message, state: FSMContext) -> None:
+    num = (await select_from_db(f'SELECT id FROM legendary WHERE user_id={message.from_user.id} AND class1 <> NULL'))[0]
+    if len(num) == 0:
+        pass
+    elif type(num[0]) is type([]):
+        num = [x[0] for x in num]
+    board = [[KeyboardButton(text='◀️ Отмена')]]
+    for i in range(len(num) // 4):
+        board.append([KeyboardButton(text=f'{num[4 * i + x]}') for x in range(4)])
+    if len(num) % 4:
+        board.append([KeyboardButton(text=f'{x}') for x in num[(len(num) // 4 * 4):]])
+    keyboard = ReplyKeyboardMarkup(keyboard=board, resize_keyboard=True)
+    await message.reply(f'Введите номер {param2[1]}.',
+                        reply_markup=keyboard)
+    await state.set_state(Form5.value)
+
+
+@dp.message(Form5.value)
+async def sell_main(message: Message, state: FSMContext) -> None:
+    form = await state.update_data(value=message.text)
+    await message.reply(f'Введите желаемую стоимость {param2[1]}', reply_markup=cancel_keyboard)
+    await state.set_state(Form5.cost)
+
+
+@dp.message(Form5.cost)
+async def process_sell_main(message: Message, state: FSMContext) -> None:
+    form = await state.update_data(cost=message.text)
+    change = False
+    num = form['value']
+    cost = form['cost']
+
+    try:
+        cost = int(cost)
+        if cost < 0:
+            cost = 0
+    except ValueError:
+        cost = 0
+
+    max_num = (await select_from_db(f"SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}"))[0]
+    if max_num is None:
+        max_num = 0
+
+    try:
+        if 1 <= int(num) <= max_num:
+            class_ = (await select_from_db(
+                f"SELECT class1 FROM legendary WHERE id={int(num)} AND user_id={message.from_user.id}"))[0]
+            if not (class_ is None):
+                change = True
+            else:
+                await message.reply(f"Этот {param2[0]} не коллекционный❌")
+    except ValueError:
+        await message.reply("Неверные значения❌\n")
+
+    if change:
+        await insert_into_db(
+            f"UPDATE legendary SET sell={cost} WHERE id={int(num)} AND user_id={message.from_user.id}")
+        if cost > 0:
+            await message.reply(f"Цена на {param2[3]} изменена на {cost}{param1[13]}")
+        else:
+            await message.reply(f"{param2[0].capitalize()} снят с продажи")
+
+    await state.clear()
+
+
+@dp.message(Command(commands=['promo', 'promocode', 'activate']))
+async def activate_button(message: Message, state: FSMContext):
+    await message.reply(f'Введите промокод.', reply_markup=cancel_keyboard)
+    await state.set_state(Form6.value)
+
+
+@dp.message(Form6.value)
+async def process_activate_button(message: Message, state: FSMContext):
+    form = await state.update_data(value=message.text)
+    promo = form['value']
+    await activate_main(message, promo)
     await state.clear()
 
 
@@ -1145,33 +1227,21 @@ async def me_main(message: Message) -> None:
     cursor = await select_from_db(f'SELECT * FROM legendary WHERE user_id={message.from_user.id} ORDER BY id')
     if len(cursor) == 0:
         pass
-    elif type(cursor[0]) is type([]):
-        for row in cursor:
-            if row[4]:
-                count2 += 1
-                text2 += (f'№{row[0]}, {row[2]}{" " + row[3] if row[3] else ""}, '
-                          f'{param3[0]}: {row[4] if row[4] else row[5]}, '
-                          f'{param3[1]}: {row[6] if row[6] else row[7]}, '
-                          f'{param3[2]}: {row[8] if row[8] else row[9]}\n')
-            else:
-                count1 += 1
-                text1 += (f'№{row[0]}, {row[2]}{" " + row[3] if row[3] else ""}, '
-                          f'{param3[0]}: {row[4] if row[4] else row[5]}, '
-                          f'{param3[1]}: {row[6] if row[6] else row[7]}, '
-                          f'{param3[2]}: {row[8] if row[8] else row[9]}\n')
-    else:
-        if cursor[4]:
-            count2 = 1
-            text2 = (f'№{cursor[0]}, {cursor[2]}{" " + cursor[3] if cursor[3] else ""}, '
-                     f'{param3[0]}: {cursor[4] if cursor[4] else cursor[5]}, '
-                     f'{param3[1]}: {cursor[6] if cursor[6] else cursor[7]}, '
-                     f'{param3[2]}: {cursor[8] if cursor[8] else cursor[9]}\n')
+    elif not (type(cursor[0]) is type([])):
+        cursor = [cursor]
+    for row in cursor:
+        if row[4]:
+            count2 += 1
+            text2 += (f'№{row[0]}, {row[2]}{" " + row[3] if row[3] else ""}, '
+                      f'{param3[0]}: {row[4] if row[4] else row[5]}, '
+                      f'{param3[1]}: {row[6] if row[6] else row[7]}, '
+                      f'{param3[2]}: {row[8] if row[8] else row[9]}\n')
         else:
-            count1 = 1
-            text1 = (f'№{cursor[0]}, {cursor[2]}{" " + cursor[3] if cursor[3] else ""}, '
-                     f'{param3[0]}: {cursor[4] if cursor[4] else cursor[5]}, '
-                     f'{param3[1]}: {cursor[6] if cursor[6] else cursor[7]}, '
-                     f'{param3[2]}: {cursor[8] if cursor[8] else cursor[9]}\n')
+            count1 += 1
+            text1 += (f'№{row[0]}, {row[2]}{" " + row[3] if row[3] else ""}, '
+                      f'{param3[0]}: {row[4] if row[4] else row[5]}, '
+                      f'{param3[1]}: {row[6] if row[6] else row[7]}, '
+                      f'{param3[2]}: {row[8] if row[8] else row[9]}\n')
 
     # dtime = await str_to_datetime(dtime)
     # h2 = await str_to_datetime(h2)
@@ -1192,49 +1262,6 @@ async def me_main(message: Message) -> None:
     if count1 + count2:
         await message.reply(f'{param2[13]}Легендарных {param2[7]}: {count1}\n{text1} \n'
                             f'{param2[14]}Коллекционных {param2[7]}: {count2}\n{text2}')
-
-
-@dp.message(Command(commands=['sell']))
-async def sell_main(message: Message) -> None:
-    change = False
-    price = 0
-    if len(message.text.split()) >= 2:
-        num = message.text.split()[1]
-        max_num = (await select_from_db(f"SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}"))[0]
-        if max_num is None:
-            max_num = 0
-
-        try:
-            if 1 <= int(num) <= max_num:
-                class_ = (await select_from_db(f"SELECT class1 FROM legendary WHERE id={int(num)} AND user_id={message.from_user.id}"))[0]
-                if not (class_ is None):
-                    change = True
-                else:
-                    await message.reply(f"Этот {param2[0]} не коллекционный❌")
-        except ValueError:
-            await message.reply("Неверные значения❌\n"
-                                "Пример команды: /sell 1 100\n"
-                                "/sell 1 0")
-
-        if len(message.text.split()) >= 3:
-            try:
-                price = int(message.text.split()[2])
-                if price < 0:
-                    price = 0
-            except ValueError:
-                price = 0
-
-        if change:
-            await insert_into_db(
-                f"UPDATE legendary SET sell={price} WHERE id={int(num)} AND user_id={message.from_user.id}")
-            if price > 0:
-                await message.reply(f"Цена на {param2[3]} изменена на {price}{param1[13]}")
-            else:
-                await message.reply(f"{param2[0].capitalize()} снят с продажи")
-    else:
-        await message.reply("Недостаточно значений❌\n"
-                            "Пример команды: /sell 1 100\n"
-                            "/sell 1 0")
 
 
 @dp.message(Command(commands=['market']))
