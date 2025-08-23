@@ -630,9 +630,9 @@ async def activate_main(message: Message, promo="") -> None:
                 if not ((await get_promo(promo)) is None):
                     bonus = await get_promo(promo)
                 else:
-                    await message.reply("Промокод не найден❌")
+                    await message.reply("Промокод не найден❌", reply_markup=main_keyboard)
             else:
-                await message.reply("Промокод не введён❌")
+                await message.reply("Промокод не введён❌", reply_markup=main_keyboard)
         else:
             bonus = await get_promo(promo)
 
@@ -652,13 +652,13 @@ async def activate_main(message: Message, promo="") -> None:
             if "balance" in keys:
                 kol = await select_from_db(f"SELECT kol FROM stat WHERE user_id={message.from_user.id}")
                 await insert_into_db(f"UPDATE stat SET kol={kol[0] + bonus["balance"]} WHERE user_id={message.from_user.id}")
-                await message.reply(f"Зачислено {bonus["balance"]}{param1[13]}")
+                await message.reply(f"Зачислено {bonus["balance"]}{param1[13]}", reply_markup=main_keyboard)
             if "buy" in keys:
                 await buy_main(message, promo=bonus["buy"])
         else:
-            await message.reply("Промокод не найден❌")
+            await message.reply("Промокод не найден❌", reply_markup=main_keyboard)
     else:
-        await message.reply("Вы уже активировали промокод❌")
+        await message.reply("Вы уже активировали промокод❌", reply_markup=main_keyboard)
 
 
 @dp.message(Command(commands=['new_admin', 'add_admin']))
@@ -808,16 +808,18 @@ async def process_name_button_main(message: Message, state: FSMContext):
 
 @dp.message(F.text == main_keyboard.keyboard[3][0].text)
 async def collect_button_main(message: Message, state: FSMContext):
-    max_num = (await select_from_db(f'SELECT max(id) FROM legendary WHERE user_id={message.from_user.id}'))[0]
-    if max_num is None:
-        max_num = 0
+    num = (await select_from_db(f'SELECT id FROM legendary WHERE user_id={message.from_user.id} AND value1=1 AND value2=1 AND value3=1'))[0]
+    if len(num) == 0:
+        pass
+    elif type(num[0]) is type([]):
+        num = [x[0] for x in num]
     board = [[KeyboardButton(text='◀️ Отмена')]]
-    for i in range(max_num // 4):
-        board.append([KeyboardButton(text=f'{4 * i + x}') for x in range(1, 5)])
-    if max_num % 4:
-        board.append([KeyboardButton(text=f'{x}') for x in range(max_num // 4 * 4 + 1, max_num + 1)])
+    for i in range(len(num) // 4):
+        board.append([KeyboardButton(text=f'{num[4 * i + x]}') for x in range(4)])
+    if len(num) % 4:
+        board.append([KeyboardButton(text=f'{x}') for x in num[(len(num) // 4 * 4):]])
     keyboard = ReplyKeyboardMarkup(keyboard=board, resize_keyboard=True)
-    await message.reply(f"Введите номер {param2[1]}. Всего у вас {param2[7]}: {max_num}",
+    await message.reply(f"Введите номер {param2[1]}.",
                         reply_markup=keyboard)
     await state.set_state(Form3.value)
 
@@ -834,7 +836,7 @@ async def process_collect_button_main(message: Message, state: FSMContext):
 @dp.message(Command(commands=['time', 'timezone', 'set_time']))
 @dp.message(F.text == main_keyboard.keyboard[4][1].text)
 async def time_button_main(message: Message, state: FSMContext):
-    await message.reply("Выберите свой часовой пояс из списка",
+    await message.reply("Введите часовой пояс в формате UTC+🔢 или UTC-🔢",
                         reply_markup=time_keyboard)
     await state.set_state(Form4.value)
 
@@ -843,10 +845,14 @@ async def time_button_main(message: Message, state: FSMContext):
 async def process_time_button_main(message: Message, state: FSMContext):
     form = await state.update_data(value=message.text)
     num: str = form['value']
-    zones = [y[0].text for y in (x for x in time_keyboard.keyboard)] + [y[1].text for y in (x for x in time_keyboard.keyboard)]
-    if num in zones:
-        num = str(int(num.split()[0][3:]) - 3)
-        await timezone_main(message, num)
+    # zones = [y[0].text for y in (x for x in time_keyboard.keyboard)] + [y[1].text for y in (x for x in time_keyboard.keyboard)]
+    if num.startswith('UTC'):
+        try:
+            num = str(int(num.split()[0][3:]) - 3)
+            await timezone_main(message, num)
+        except ValueError:
+            await message.reply("Неверное значение",
+                                reply_markup=main_keyboard)
     else:
         await message.reply("Неверное значение",
                             reply_markup=main_keyboard)
@@ -874,7 +880,7 @@ async def sell_main(message: Message, state: FSMContext) -> None:
 @dp.message(Form5.value)
 async def sell_main(message: Message, state: FSMContext) -> None:
     form = await state.update_data(value=message.text)
-    await message.reply(f'Введите желаемую стоимость {param2[1]}', reply_markup=cancel_keyboard)
+    await message.reply(f'Введите желаемую стоимость {param2[1]} или 0, чтобы снять с продажи.', reply_markup=cancel_keyboard)
     await state.set_state(Form5.cost)
 
 
@@ -1051,8 +1057,9 @@ async def get_main(message: Message) -> None:
 
         if have_bonus:
             get_kol += bonus
-            await insert_into_db(f'UPDATE stat SET bonus_date="{
-            user_date.split()[0]}" WHERE user_id={message.from_user.id}')
+            await insert_into_db(
+                f'UPDATE stat SET bonus_date="{user_date.split()[0]}" '
+                f'WHERE user_id={message.from_user.id}')
 
         """Время следующего возможного получения валюты после времени из БД"""
         h2 = await change_timedelta(last, DELTA)
@@ -1064,9 +1071,8 @@ async def get_main(message: Message) -> None:
     if maybe:
         """Обновление БД, ответ пользователю"""
         await insert_into_db(
-            f'UPDATE stat SET kol={kol + get_kol + streak // 3}, last="{dtime}", koff={
-            koff_index}, gets_kol={gets_kol} WHERE user_id={
-            message.from_user.id}')
+            f'UPDATE stat SET kol={kol + get_kol + streak // 3}, last="{dtime}", '
+            f'koff={koff_index}, gets_kol={gets_kol} WHERE user_id={message.from_user.id}')
 
         if DELTA % 10 == 1 and DELTA // 10 != 1:
             add = ""
