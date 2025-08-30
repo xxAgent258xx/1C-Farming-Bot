@@ -85,9 +85,9 @@ async def check_min_datetime(date1: str, date2: str) -> str | int:
                             return 0
 
 
-async def select_from_db(query: str) -> list:
+async def select_from_db(query: str, db_name=DB_NAME) -> list:
     ans = []
-    async with aiosqlite.connect(DB_NAME) as db:
+    async with aiosqlite.connect(db_name) as db:
         async with db.execute(query) as cursor:
             async for row in cursor:
                 ans.append(list(row))
@@ -127,8 +127,8 @@ async def str_to_datetime(date: str) -> datetime.datetime:
     return ans
 
 
-async def insert_into_db(query: str) -> None:
-    async with aiosqlite.connect(DB_NAME) as db:
+async def insert_into_db(query: str, db_name=DB_NAME) -> None:
+    async with aiosqlite.connect(db_name) as db:
         await db.execute(query)
         await db.commit()
 
@@ -194,6 +194,10 @@ CMD_TEXT =\
     f'легендарн{add1} {param2[3]} за {price[1]} {param1[7]}{param1[13]}\n' + \
     '/collect {1} - сделать ' + \
     f'легендарн{add1} {param2[3]} коллекционн{add2} за {price[2]} {param1[7]}{param1[13]}\n' + \
+    '/sell {1} {6} - выставить на продажу ' + f'коллекционн{add1} {param2[3]}\n' + \
+    f'@wuppit_bot ' + '{7} {7} {7} - найти ' + f'коллекционн{add1} {param2[3]}\n' + \
+    '(для пропуска фильтра любой символ)\n' + \
+    '/market {7} {7} {7} - приобрести ' + f'коллекционн{add1} {param2[3]}\n' + \
     '/name {1} {3} - задать имя ' + f'коллекционн{add3} {param2[2]}\n' + \
     '/me - посмотреть профиль\n' + \
     '/promo {4} - активировать промокод\n' + \
@@ -203,4 +207,6 @@ CMD_TEXT =\
     '{2} - номер характеристики (1, 2 или 3)\n' + \
     '{3} - имя ' + f'{param2[1]}\n' + \
     '{4} - промокод\n' + \
-    '{5} - разница во времени от -15 до +11\n'
+    '{5} - разница во времени от -15 до +11\n' + \
+    '{6} - цена (0 для снятия с продажи)\n' + \
+    '{7} - значение характеристики\n'

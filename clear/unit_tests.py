@@ -1,62 +1,38 @@
 import unittest
-from bot_const import select_from_db
-import sqlite3
+import asyncio
+from bot_const import select_from_db, insert_into_db
 
-
-# DB_NAME = 'unit_tests.db'
-# connector = sqlite3.connect(DB_NAME)
-# cursor = connector.cursor()
-#
-# cursor.execute("""
-# CREATE TABLE IF NOT EXISTS "main_table" (
-# "test_int"	INTEGER,
-# "test_str"	TEXT);
-# """)
-#
-# cursor.execute("DELETE FROM main_table")
-# cursor.execute('INSERT INTO main_table VALUES(123, "abc")')
-# cursor.execute('INSERT INTO main_table VALUES(456, "def")')
-#
-# connector.commit()
-# cursor.close()
-# connector.close()
+DB_NAME = 'unit_tests.db'
 
 
 class TestDatabaseOperations(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        DB_NAME = 'unit_tests.db'
-        connector = sqlite3.connect(DB_NAME)
-        cursor = connector.cursor()
 
-        cursor.execute("""
+        asyncio.run(insert_into_db("""
         CREATE TABLE IF NOT EXISTS "main_table" (
         "test_int"	INTEGER,
         "test_str"	TEXT);
-        """)
+        """, db_name=DB_NAME))
 
-        cursor.execute("DELETE FROM main_table")
-        cursor.execute('INSERT INTO main_table VALUES(123, "abc")')
-        cursor.execute('INSERT INTO main_table VALUES(456, "def")')
+        asyncio.run(insert_into_db("DELETE FROM main_table", db_name=DB_NAME))
+        asyncio.run(insert_into_db('INSERT INTO main_table VALUES(123, "abc")', db_name=DB_NAME))
+        asyncio.run(insert_into_db('INSERT INTO main_table VALUES(456, "def")', db_name=DB_NAME))
 
-        connector.commit()
-        cursor.close()
-        connector.close()
-
-    async def test_select_two_rows_two_columns(self):
-        result = await select_from_db('SELECT * FROM main_table')
+    def test_select_two_rows_two_columns(self):
+        result = asyncio.run(select_from_db('SELECT * FROM main_table', db_name=DB_NAME))
         self.assertEqual(result, [[123, "abc"], [456, "def"]])
 
-    async def test_select_one_row_two_columns(self):
-        result = await select_from_db('SELECT * FROM main_table WHERE test_int=123')
+    def test_select_one_row_two_columns(self):
+        result = asyncio.run(select_from_db('SELECT * FROM main_table WHERE test_int=123', db_name=DB_NAME))
         self.assertEqual(result, [123, "abc"])
 
-    async def test_select_two_rows_one_column(self):
-        result = await select_from_db('SELECT test_int FROM main_table')
+    def test_select_two_rows_one_column(self):
+        result = asyncio.run(select_from_db('SELECT test_int FROM main_table', db_name=DB_NAME))
         self.assertEqual(result, [[123], [456]])
 
-    async def test_select_one_row_one_column(self):
-        result = await select_from_db('SELECT test_int FROM main_table WHERE test_int=123')
+    def test_select_one_row_one_column(self):
+        result = asyncio.run(select_from_db('SELECT test_int FROM main_table WHERE test_int=123', db_name=DB_NAME))
         self.assertEqual(result, [123])
 
 
